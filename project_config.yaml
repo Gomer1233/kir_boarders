@@ -1,0 +1,78 @@
+﻿# Исходные файлы из системы (структура: data/route_1/, data/route_2/)
+inputs:
+  route_1: "data/route_1"
+  route_2: "data/route_2"
+
+# Режим работы: route_1 | route_2 | both
+mode: "route_1"
+
+# Колонки для сопоставления
+columns:
+  svod:
+    week: "НеделяГод"
+    ts: "ТС"
+    factory: "Завод"
+    category: "Категория"
+  poteri:
+    week: "Неделя"
+    ts: "Торговая сеть"
+    factory: "Завод"
+    category: "Категория"
+    # Сопоставление исходных имен из файла poteri с универсальными именами
+    rename_map:
+      "Списание без НДС (Итог) по B06, руб": "Списания"
+      "Выручка, руб": "Выручка"
+      "Свободно используемый товарный запас без НДС, руб": "Свободный ТЗ"
+  # Универсальные имена столбцов для очистки (используются в cleaner_v2.py)
+  clean_columns:
+    - "Списания"
+    - "Выручка"
+    - "Свободный ТЗ"
+  clean_target_col: "Списания"
+  target_col: "КИР-ХХХ. Ваш показатель"
+
+# Правила очистки
+cleaning:
+  remove_zeros: true
+  remove_empty_cols: []
+  method: "iqr"
+  factor: 1.5
+  columns_to_clean:
+    - "Списания"
+    - "Выручка"
+    - "Свободный ТЗ"
+  outlier_mode: "any"
+  min_group_size: 3
+
+# Группировка
+grouping:
+  with_cats:
+    - "НеделяГод"
+    - "ТС"
+    - "Категория"
+  without_cats:
+    - "НеделяГод"
+    - "ТС"
+    - "Завод"
+
+# Визуализация
+visualization:
+  default_week: "202603"
+  default_category: "Неп"
+  target_column: "КИР-ХХХ. Ваш показатель"
+  bin_step: 0.005
+  bin_range:
+    - 0
+    - 1.05
+  percentiles:
+    p25: 0.25
+    p85: 0.85
+    adjustable: 0.5
+
+# Результирующие файлы и логи
+outputs:
+  merged_temp: "data/merged_step1.xlsx"
+  final_clean: "data/final_clean_data.xlsx"
+  outliers_report: "data/outliers_report.xlsx"
+  log_file: "logs/processing_log.txt"
+
