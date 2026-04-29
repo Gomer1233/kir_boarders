@@ -2,9 +2,9 @@ import os
 import sys
 import traceback
 
-import pandas as pd
 import yaml
 
+from scripts.excel_reader import read_excel_loss_safe
 from scripts.merge_data_v3 import merge_route_data
 from scripts.pipeline import assert_audit_invariants, write_route_outputs
 from scripts.quality_flags import add_quality_flags
@@ -75,8 +75,8 @@ def run_route(config, route_name):
     print(f"poteri path: {route_conf['poteri']}")
     print("=" * 60)
 
-    kir_df = pd.read_excel(route_conf["svod"])
-    poteri_df = pd.read_excel(route_conf["poteri"])
+    kir_df = read_excel_loss_safe(route_conf["svod"])
+    poteri_df = read_excel_loss_safe(route_conf["poteri"])
 
     raw_df, diagnostics = merge_route_data(
         kir_df,
