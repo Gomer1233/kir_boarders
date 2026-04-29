@@ -271,6 +271,27 @@ def first_bins_store_sum(bin_table, n_bins):
     }
 
 
+def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):
+    if bin_table.empty:
+        return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
+
+    bins_used = min(max(int(n_bins), 0), len(bin_table))
+    if bins_used == 0:
+        return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
+
+    first_bins = bin_table.head(bins_used)
+    start = float(first_bins["bin_start"].iloc[0])
+    end = float(first_bins["bin_end"].iloc[-1])
+    numeric = pd.to_numeric(metric_series, errors="coerce")
+    mask = numeric.ge(start) & numeric.lt(end)
+    row_sum = int(mask.sum())
+    if store_series is not None:
+        store_sum = int(pd.Series(store_series).loc[mask].nunique())
+    else:
+        store_sum = row_sum
+    return {"bins_used": bins_used, "store_sum": store_sum, "row_sum": row_sum}
+
+
 def percentile_store_counts(series, custom_percentile, store_series=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -529,11 +550,12 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     if not bin_table.empty:
         max_bins = len(bin_table)
         n_bins = st.number_input("Sum first N bins", min_value=1, max_value=max_bins, value=min(3, max_bins), step=1)
-        first_bins = first_bins_store_sum(bin_table, n_bins)
+        first_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
         sum_col1, sum_col2, sum_col3 = st.columns(3)
         sum_col1.metric("First bins used", first_bins["bins_used"])
-        sum_col2.metric("Stores in first bins", first_bins["store_sum"])
+        sum_col2.metric("Unique stores in first bins", first_bins["store_sum"])
         sum_col3.metric("Rows in first bins", first_bins["row_sum"])
+        st.caption("Rows can equal stores when each selected row represents one store. Unique stores are counted across the combined first-bin range.")
     st.dataframe(bin_table, use_container_width=True)
 
 
