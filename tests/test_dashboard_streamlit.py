@@ -4,6 +4,7 @@ import pandas as pd
 
 from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
+    acquire_project_run_lock,
     download_file_name,
     FACTORY_COL,
     FILTER_COLUMNS,
@@ -34,6 +35,7 @@ from dashboard_streamlit import (
     sort_metric_columns,
     project_select_options,
     read_file_for_download,
+    release_project_run_lock,
 )
 
 TS_COL = "\u0422\u0421"
@@ -367,6 +369,16 @@ def test_project_route_uploads_exist_requires_both_stable_source_files(tmp_path)
     (upload_dir / "poteri_source.xlsx").write_bytes(b"poteri")
 
     assert project_route_uploads_exist("950", "route_1", projects_dir=tmp_path) is True
+
+
+def test_project_run_lock_prevents_second_parallel_run(tmp_path):
+    assert acquire_project_run_lock("950", projects_dir=tmp_path) is True
+    assert acquire_project_run_lock("950", projects_dir=tmp_path) is False
+
+    release_project_run_lock("950", projects_dir=tmp_path)
+
+    assert acquire_project_run_lock("950", projects_dir=tmp_path) is True
+    release_project_run_lock("950", projects_dir=tmp_path)
 
 
 def test_latest_project_run_name_returns_newest_run(tmp_path):

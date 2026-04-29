@@ -1,6 +1,7 @@
 from pathlib import Path
 from html import escape
 import json
+import os
 import re
 
 import pandas as pd
@@ -98,6 +99,30 @@ def load_upload_manifest(project_name, route_name, projects_dir=DATA_PROJECTS_DI
 def project_route_uploads_exist(project_name, route_name, projects_dir=DATA_PROJECTS_DIR):
     upload_dir = Path(projects_dir) / str(project_name) / "uploads" / route_name
     return (upload_dir / KIR_SOURCE_NAME).exists() and (upload_dir / POTERI_SOURCE_NAME).exists()
+
+
+def project_run_lock_path(project_name, projects_dir=DATA_PROJECTS_DIR):
+    return Path(projects_dir) / str(project_name) / ".pipeline.lock"
+
+
+def acquire_project_run_lock(project_name, projects_dir=DATA_PROJECTS_DIR):
+    lock_path = project_run_lock_path(project_name, projects_dir=projects_dir)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False
+    with os.fdopen(fd, "w", encoding="utf-8") as file:
+        file.write("Pipeline run is active.\n")
+    return True
+
+
+def release_project_run_lock(project_name, projects_dir=DATA_PROJECTS_DIR):
+    lock_path = project_run_lock_path(project_name, projects_dir=projects_dir)
+    try:
+        lock_path.unlink()
+    except FileNotFoundError:
+        pass
 
 
 def list_run_dirs():
@@ -869,6 +894,7 @@ def main():
         st.sidebar.info("Create a project before uploading files or running the pipeline.")
 
     if selected_project:
+        project_is_running = is_running or project_run_lock_path(selected_project).exists()
         with st.sidebar.expander("1. Upload files", expanded=False):
             if latest_run:
                 st.caption(f"Latest run: {latest_run}")
@@ -877,7 +903,7 @@ def main():
                 ["route_1", "route_2", "both"],
                 format_func=route_label,
                 key="upload_route_mode",
-                disabled=is_running,
+                disabled=project_is_running,
             )
             for route_name in routes_for_ui_mode(route_mode):
                 route_display = route_label(route_name)
@@ -894,15 +920,19 @@ def main():
                     f"KIR file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_kir_upload",
-                    disabled=is_running,
+                    disabled=project_is_running,
                 )
                 poteri_file = st.file_uploader(
                     f"Poteri file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_poteri_upload",
-                    disabled=is_running,
+                    disabled=project_is_running,
                 )
-                if st.button("Save uploaded files", disabled=is_running or not (kir_file and poteri_file), key=f"save_{route_name}"):
+                if st.button(
+                    "Save uploaded files",
+                    disabled=project_is_running or not (kir_file and poteri_file),
+                    key=f"save_{route_name}",
+                ):
                     try:
                         result = save_uploaded_route_files(
                             selected_project,
@@ -924,8 +954,11 @@ def main():
                 (f"Run {route_label('route_2')}", ["route_2"]),
                 (f"Run {route_label('both')}", ["route_1", "route_2"]),
             ]:
-                if st.button(label, disabled=is_running):
+                if st.button(label, disabled=project_is_running):
                     try:
+                        if not acquire_project_run_lock(selected_project):
+                            st.warning("Прогон уже выполняется для этого проекта. Дождитесь завершения текущего запуска.")
+                            st.stop()
                         st.session_state["pipeline_running"] = True
                         st.warning("Прогон выполняется. Остальные действия заблокированы до завершения.")
                         stop_col, _ = st.columns([1, 2])
@@ -978,6 +1011,7 @@ def main():
                         st.exception(exc)
                     finally:
                         st.session_state["pipeline_running"] = False
+                        release_project_run_lock(selected_project)
 
         with st.sidebar.expander("3. Open dashboard", expanded=True):
             st.caption("Откройте дашборд только после готового прогона. Выбор run-а сам по себе данные не загружает.")
@@ -989,9 +1023,9 @@ def main():
                     "Ready run",
                     run_dirs,
                     format_func=dashboard_run_label,
-                    disabled=is_running,
+                    disabled=project_is_running,
                 )
-                if st.button("Open dashboard", disabled=is_running):
+                if st.button("Open dashboard", disabled=project_is_running):
                     st.session_state["opened_run_dir"] = str(selected_run)
 
     opened_run_dir = st.session_state.get("opened_run_dir")
