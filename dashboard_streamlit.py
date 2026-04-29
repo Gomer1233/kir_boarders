@@ -5,6 +5,7 @@ import re
 import pandas as pd
 
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
+from scripts.upload_runner import save_uploaded_route_files
 
 try:
     import streamlit as st
@@ -81,6 +82,17 @@ def project_select_options(projects):
 
 def normalize_new_project_input(value):
     return sanitize_project_name(value)
+
+
+def routes_for_ui_mode(mode):
+    route_modes = {
+        "route_1": ["route_1"],
+        "route_2": ["route_2"],
+        "both": ["route_1", "route_2"],
+    }
+    if mode not in route_modes:
+        raise ValueError(f"Unsupported route mode: {mode}")
+    return route_modes[mode]
 
 
 def run_file_paths(run_dir):
@@ -745,6 +757,39 @@ def main():
         except Exception as exc:
             st.sidebar.error(str(exc))
 
+    current_projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
+    if current_projects:
+        with st.sidebar.expander("Upload source files", expanded=False):
+            upload_project = st.selectbox("Upload project", current_projects, key="upload_project")
+            route_mode = st.selectbox("Upload route mode", ["route_1", "route_2", "both"], key="upload_route_mode")
+            for route_name in routes_for_ui_mode(route_mode):
+                st.markdown(f"**{route_name}**")
+                kir_file = st.file_uploader(
+                    f"KIR file for {route_name}",
+                    type=["xlsx", "xls"],
+                    key=f"{route_name}_kir_upload",
+                )
+                poteri_file = st.file_uploader(
+                    f"Poteri file for {route_name}",
+                    type=["xlsx", "xls"],
+                    key=f"{route_name}_poteri_upload",
+                )
+                if st.button(f"Save {route_name} uploads", disabled=not (kir_file and poteri_file)):
+                    try:
+                        result = save_uploaded_route_files(
+                            upload_project,
+                            route_name,
+                            kir_file,
+                            poteri_file,
+                            base_dir=DATA_PROJECTS_DIR,
+                        )
+                        st.success(f"Saved uploads for {route_name}")
+                        st.caption(f"KIR: {result['kir_path']}")
+                        st.caption(f"Poteri: {result['poteri_path']}")
+                        st.caption(f"Manifest: {result['manifest_path']}")
+                    except Exception as exc:
+                        st.error(str(exc))
+
     st.sidebar.divider()
     run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])
     if run_source == "Legacy runs":
@@ -754,11 +799,10 @@ def main():
             return
         run_dir = st.sidebar.selectbox("Run", run_dirs, format_func=lambda path: path.name)
     else:
-        projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
-        if not projects:
+        if not current_projects:
             st.warning("No projects found in data/projects/.")
             return
-        project_name = st.sidebar.selectbox("Project", projects)
+        project_name = st.sidebar.selectbox("Project", current_projects)
         run_dirs = list_project_run_dirs(project_name)
         if not run_dirs:
             st.warning(f"No runs found for project {project_name}.")

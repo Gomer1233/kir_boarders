@@ -22,6 +22,7 @@ from dashboard_streamlit import (
     metric_bar_value_column,
     network_chart_color,
     normalize_new_project_input,
+    routes_for_ui_mode,
     sort_metric_columns,
     project_select_options,
 )
@@ -254,6 +255,21 @@ def test_normalize_new_project_input_strips_whitespace():
 
 def test_normalize_new_project_input_collapses_inner_spaces():
     assert normalize_new_project_input(" KIR 003 ") == "KIR_003"
+
+
+def test_routes_for_ui_mode_maps_single_and_both_modes():
+    assert routes_for_ui_mode("route_1") == ["route_1"]
+    assert routes_for_ui_mode("route_2") == ["route_2"]
+    assert routes_for_ui_mode("both") == ["route_1", "route_2"]
+
+
+def test_routes_for_ui_mode_rejects_unknown_mode():
+    try:
+        routes_for_ui_mode("bad")
+    except ValueError as exc:
+        assert "Unsupported route mode" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
 
 
 from dashboard_streamlit import read_final_data_with_progress
