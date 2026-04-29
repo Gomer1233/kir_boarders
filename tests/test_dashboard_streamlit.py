@@ -92,3 +92,15 @@ def test_format_week_label_handles_excel_float_week():
     assert format_week_label(202607.0) == "07.2026"
     assert format_week_label("202608.0") == "08.2026"
     assert format_week_label("2026.09") == "09.2026"
+
+
+from dashboard_streamlit import run_file_paths
+
+
+def test_run_file_paths_returns_final_and_raw_paths(tmp_path):
+    paths = run_file_paths(tmp_path / "run_1_route_1")
+
+    assert paths == {
+        "final": tmp_path / "run_1_route_1" / "final_clean_data.xlsx",
+        "raw": tmp_path / "run_1_route_1" / "merged_raw.xlsx",
+    }

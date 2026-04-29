@@ -48,6 +48,14 @@ def list_run_dirs():
     )
 
 
+def run_file_paths(run_dir):
+    run_dir = Path(run_dir)
+    return {
+        "final": run_dir / "final_clean_data.xlsx",
+        "raw": run_dir / "merged_raw.xlsx",
+    }
+
+
 def format_week_label(value):
     text = str(value).strip()
     if text.endswith(".0"):
@@ -150,10 +158,7 @@ def _problem_rows(df):
 
 
 def _load_run_dataframe(run_dir):
-    final_path = run_dir / "final_clean_data.xlsx"
-    raw_path = run_dir / "merged_raw.xlsx"
-    st.sidebar.write(f"Final: `{final_path}`")
-    st.sidebar.write(f"Raw: `{raw_path}`")
+    final_path = run_file_paths(run_dir)["final"]
 
     if not final_path.exists():
         st.error(f"Missing final file: {final_path}")
@@ -177,6 +182,11 @@ def _render_quality_cards(filtered, numeric_metric):
 
 def _render_audit_tab(run_dir, filtered, numeric_metric):
     _render_quality_cards(filtered, numeric_metric)
+    paths = run_file_paths(run_dir)
+    with st.expander("Opened files", expanded=False):
+        st.write(f"Final: `{paths['final']}`")
+        st.write(f"Raw: `{paths['raw']}`")
+
     diagnostics_path = run_dir / "merge_diagnostics.md"
     if diagnostics_path.exists():
         st.subheader("Merge diagnostics")
