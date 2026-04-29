@@ -125,11 +125,16 @@ def routes_for_ui_mode(mode):
 
 def route_label(route_name):
     labels = {
-        "route_1": "Route 1: Week + TS + Category + Plant",
-        "route_2": "Route 2: Week + TS + Plant",
+        "route_1": "Route 1: Магазины и Категории",
+        "route_2": "Route 2: Магазины",
         "both": "Both routes",
     }
     return labels.get(route_name, route_name)
+
+
+def format_running_message(project_name, routes):
+    route_name = "both" if len(routes) > 1 else routes[0]
+    return f"Running {route_label(route_name)} for project {project_name}..."
 
 
 def format_run_result(result):
@@ -819,22 +824,45 @@ def main():
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.title("KIR Dashboard")
 
-    st.sidebar.subheader("Projects")
-    new_project_name = st.sidebar.text_input("New project name", placeholder="003")
-    if st.sidebar.button("Create project"):
-        try:
-            project_name = normalize_new_project_input(new_project_name)
-            create_project(project_name, base_dir=DATA_PROJECTS_DIR)
-            st.sidebar.success(f"Project created: {project_name}")
-            st.rerun()
-        except Exception as exc:
-            st.sidebar.error(str(exc))
-
+    is_running = st.session_state.get("pipeline_running", False)
     current_projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
+
+    st.sidebar.subheader("Project")
+    if is_running:
+        st.sidebar.warning("Прогон выполняется. Не закрывайте вкладку и не меняйте настройки до завершения.")
+        st.sidebar.button(
+            "Остановить прогон",
+            disabled=True,
+            help="В MVP прогон выполняется синхронно. Реальная остановка требует отдельного фонового процесса.",
+        )
+    else:
+        if st.sidebar.button("Create new project"):
+            st.session_state["show_create_project"] = True
+
+    if st.session_state.get("show_create_project") and not is_running:
+        with st.sidebar.container(border=True):
+            new_project_name = st.text_input("Project name", placeholder="003")
+            if st.button("Save project"):
+                try:
+                    project_name = normalize_new_project_input(new_project_name)
+                    create_project(project_name, base_dir=DATA_PROJECTS_DIR)
+                    st.session_state["show_create_project"] = False
+                    st.sidebar.success(f"Project created: {project_name}")
+                    st.rerun()
+                except Exception as exc:
+                    st.sidebar.error(str(exc))
+
+    selected_project = None
     if current_projects:
-        with st.sidebar.expander("Upload source files", expanded=False):
-            upload_project = st.selectbox("Upload project", current_projects, key="upload_project")
-            latest_run = latest_project_run_name(upload_project)
+        selected_project = st.sidebar.selectbox("Selected project", current_projects, disabled=is_running)
+        latest_run = latest_project_run_name(selected_project)
+        if latest_run:
+            st.sidebar.caption(f"Latest run: {latest_run}")
+    else:
+        st.sidebar.info("Create a project before uploading files or running the pipeline.")
+
+    if selected_project:
+        with st.sidebar.expander("1. Upload files", expanded=False):
             if latest_run:
                 st.caption(f"Latest run: {latest_run}")
             route_mode = st.selectbox(
@@ -842,11 +870,12 @@ def main():
                 ["route_1", "route_2", "both"],
                 format_func=route_label,
                 key="upload_route_mode",
+                disabled=is_running,
             )
             for route_name in routes_for_ui_mode(route_mode):
                 route_display = route_label(route_name)
                 st.markdown(f"**{route_display}**")
-                manifest = load_upload_manifest(upload_project, route_name)
+                manifest = load_upload_manifest(selected_project, route_name)
                 if manifest:
                     st.caption(
                         "Last upload: "
@@ -858,16 +887,18 @@ def main():
                     f"KIR file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_kir_upload",
+                    disabled=is_running,
                 )
                 poteri_file = st.file_uploader(
                     f"Poteri file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_poteri_upload",
+                    disabled=is_running,
                 )
-                if st.button(f"Save uploads for {route_display}", disabled=not (kir_file and poteri_file)):
+                if st.button("Save uploaded files", disabled=is_running or not (kir_file and poteri_file), key=f"save_{route_name}"):
                     try:
                         result = save_uploaded_route_files(
-                            upload_project,
+                            selected_project,
                             route_name,
                             kir_file,
                             poteri_file,
@@ -880,43 +911,64 @@ def main():
                     except Exception as exc:
                         st.error(str(exc))
 
-        with st.sidebar.expander("Run pipeline", expanded=False):
-            run_project = st.selectbox("Run project", current_projects, key="run_project")
+        with st.sidebar.expander("2. Run pipeline", expanded=False):
             for label, routes in [
                 (f"Run {route_label('route_1')}", ["route_1"]),
                 (f"Run {route_label('route_2')}", ["route_2"]),
                 (f"Run {route_label('both')}", ["route_1", "route_2"]),
             ]:
-                if st.button(label):
+                if st.button(label, disabled=is_running):
                     try:
+                        st.session_state["pipeline_running"] = True
+                        st.warning("Прогон выполняется. Остальные действия заблокированы до завершения.")
+                        stop_col, _ = st.columns([1, 2])
+                        stop_col.button(
+                            "Остановить прогон",
+                            disabled=True,
+                            help="В MVP прогон нельзя остановить из UI. Дождитесь завершения или остановите Streamlit в терминале.",
+                        )
                         for route_name in routes:
                             kir_file = st.session_state.get(f"{route_name}_kir_upload")
                             poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
                             if kir_file and poteri_file:
                                 save_uploaded_route_files(
-                                    run_project,
+                                    selected_project,
                                     route_name,
                                     kir_file,
                                     poteri_file,
                                     base_dir=DATA_PROJECTS_DIR,
                                 )
-                            if not project_route_uploads_exist(run_project, route_name):
+                            if not project_route_uploads_exist(selected_project, route_name):
                                 st.error(
                                     f"Upload KIR and Poteri files for {route_label(route_name)} first, "
-                                    "or click the Save uploads button."
+                                    "or click Save uploaded files."
                                 )
                                 st.stop()
-                        with st.spinner(f"Running {', '.join(routes)} for {run_project}..."):
-                            results = run_project_routes(
-                                run_project,
-                                routes,
-                                load_config(),
-                                base_dir=DATA_PROJECTS_DIR,
-                            )
+                        progress_bar = st.progress(0, text=format_running_message(selected_project, routes))
+                        progress_text = st.empty()
+                        completed_steps = {"count": 0}
+                        total_steps = max(1, len(routes) * 9)
+
+                        def progress_callback(stage, message):
+                            completed_steps["count"] += 1
+                            value = min(100, int(completed_steps["count"] / total_steps * 100))
+                            progress_bar.progress(value, text=message)
+                            progress_text.caption(message)
+
+                        results = run_project_routes(
+                            selected_project,
+                            routes,
+                            load_config(),
+                            base_dir=DATA_PROJECTS_DIR,
+                            progress_callback=progress_callback,
+                        )
+                        progress_bar.progress(100, text="Pipeline finished.")
                         for result in results:
                             st.success(format_run_result(result))
                     except Exception as exc:
                         st.exception(exc)
+                    finally:
+                        st.session_state["pipeline_running"] = False
 
     st.sidebar.divider()
     run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])

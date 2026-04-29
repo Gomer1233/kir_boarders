@@ -92,23 +92,34 @@ def run_project_route(
     add_flags=add_quality_flags,
     assert_invariants=assert_audit_invariants,
     write_outputs=write_route_outputs,
+    progress_callback=None,
 ) -> dict:
+    def report(stage, message):
+        if progress_callback is not None:
+            progress_callback(stage, message)
+
     name = sanitize_project_name(project_name)
     route_conf = build_project_route_config(name, route_name, config, base_dir=base_dir)
+    report("validate_uploads", f"Validating uploaded files for {route_name}.")
     _require_upload_file(route_conf["svod"])
     _require_upload_file(route_conf["poteri"])
 
     from scripts.project_registry import next_project_run_dir
 
+    report("create_run_dir", f"Creating run directory for {route_name}.")
     run_dir = next_project_run_dir(name, route_name, base_dir=base_dir)
+    report("read_kir", f"Reading KIR source file for {route_name}.")
     kir_df = read_excel(route_conf["svod"])
+    report("read_poteri", f"Reading Poteri source file for {route_name}.")
     poteri_df = read_excel(route_conf["poteri"])
+    report("merge", f"Creating raw merge file for {route_name}.")
     raw_df, diagnostics = merge_data(
         kir_df,
         poteri_df,
         route_conf["merge_key"],
         config["columns"]["poteri"]["rename_map"],
     )
+    report("quality_flags", f"Adding quality flags for {route_name}.")
     final_df = add_flags(raw_df)
     excluded_df = raw_df.iloc[0:0].copy()
     excluded_df["exclude_reason"] = []
@@ -123,10 +134,16 @@ def run_project_route(
         }
     )
 
+    report("audit", f"Checking audit invariants for {route_name}.")
     assert_invariants(raw_df, final_df, excluded_df)
+    report("write_outputs", f"Writing final_clean_data.xlsx and merged_raw.xlsx for {route_name}.")
     paths = write_outputs(run_dir, raw_df, final_df, excluded_df, diagnostics)
+    report("done", f"Finished {route_name}.")
     return {"project": name, "route": route_name, "run_dir": run_dir, "paths": paths, "diagnostics": diagnostics}
 
 
-def run_project_routes(project_name, routes, config, base_dir=PROJECTS_DIR) -> list[dict]:
-    return [run_project_route(project_name, route, config, base_dir=base_dir) for route in routes]
+def run_project_routes(project_name, routes, config, base_dir=PROJECTS_DIR, progress_callback=None) -> list[dict]:
+    return [
+        run_project_route(project_name, route, config, base_dir=base_dir, progress_callback=progress_callback)
+        for route in routes
+    ]

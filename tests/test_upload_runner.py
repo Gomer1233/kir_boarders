@@ -136,6 +136,45 @@ def test_run_project_route_uses_project_uploads_and_run_directory(tmp_path):
     assert result["run_dir"] == tmp_path / "003" / "runs" / "run_001_route_1"
 
 
+def test_run_project_route_reports_progress_stages(tmp_path):
+    create_project("003", base_dir=tmp_path)
+    upload_dir = tmp_path / "003" / "uploads" / "route_1"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    (upload_dir / "kir_source.xlsx").write_bytes(b"kir")
+    (upload_dir / "poteri_source.xlsx").write_bytes(b"poteri")
+    stages = []
+    config = {
+        "inputs": {"route_1": "data/route_1", "route_2": "data/route_2"},
+        "columns": {"poteri": {"rename_map": {}}},
+    }
+
+    run_project_route(
+        "003",
+        "route_1",
+        config,
+        base_dir=tmp_path,
+        read_excel=lambda path: pd.DataFrame({"value": [1]}),
+        merge_data=lambda kir_df, poteri_df, merge_key, rename_map: (pd.DataFrame({"value": [1]}), {"raw_row_count": 1}),
+        add_flags=lambda raw_df: raw_df.copy(),
+        assert_invariants=lambda raw_df, final_df, excluded_df: None,
+        write_outputs=lambda run_dir, raw_df, final_df, excluded_df, diagnostics: {},
+        progress_callback=lambda stage, message: stages.append((stage, message)),
+    )
+
+    assert [stage for stage, _ in stages] == [
+        "validate_uploads",
+        "create_run_dir",
+        "read_kir",
+        "read_poteri",
+        "merge",
+        "quality_flags",
+        "audit",
+        "write_outputs",
+        "done",
+    ]
+    assert any("merge" in message.lower() for _, message in stages)
+
+
 def test_run_project_route_requires_uploaded_files(tmp_path):
     create_project("003", base_dir=tmp_path)
     config = {

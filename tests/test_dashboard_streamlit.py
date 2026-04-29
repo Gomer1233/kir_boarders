@@ -8,6 +8,7 @@ from dashboard_streamlit import (
     FACTORY_COL,
     FILTER_COLUMNS,
     format_run_result,
+    format_running_message,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
@@ -271,8 +272,8 @@ def test_routes_for_ui_mode_maps_single_and_both_modes():
 
 
 def test_route_label_uses_business_names_for_ui():
-    assert route_label("route_1") == "Route 1: Week + TS + Category + Plant"
-    assert route_label("route_2") == "Route 2: Week + TS + Plant"
+    assert route_label("route_1") == "Route 1: Магазины и Категории"
+    assert route_label("route_2") == "Route 2: Магазины"
     assert route_label("both") == "Both routes"
     assert route_label("unknown") == "unknown"
 
@@ -298,10 +299,15 @@ def test_format_run_result_includes_route_run_and_output_paths(tmp_path):
 
     text = format_run_result(result)
 
-    assert "route_1" in text
+    assert "Route 1: Магазины и Категории" in text
     assert "run_001_route_1" in text
     assert "final_clean_data.xlsx" in text
     assert "merged_raw.xlsx" in text
+
+
+def test_format_running_message_uses_readable_routes_and_project():
+    assert format_running_message("950", ["route_1"]) == "Running Route 1: Магазины и Категории for project 950..."
+    assert format_running_message("950", ["route_1", "route_2"]) == "Running Both routes for project 950..."
 
 
 def test_download_file_name_includes_run_context():
