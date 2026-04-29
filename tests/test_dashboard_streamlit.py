@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from dashboard_streamlit import (
+    DATA_PROJECTS_DIR,
     FACTORY_COL,
     FILTER_COLUMNS,
     GROUP_COLUMNS,
@@ -14,6 +15,8 @@ from dashboard_streamlit import (
     format_percentile_card,
     render_percentile_card_html,
     get_numeric_metric_columns,
+    list_legacy_run_dirs,
+    list_project_run_dirs,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -208,6 +211,31 @@ def test_run_file_paths_returns_final_and_raw_paths(tmp_path):
         "final": tmp_path / "run_1_route_1" / "final_clean_data.xlsx",
         "raw": tmp_path / "run_1_route_1" / "merged_raw.xlsx",
     }
+
+
+def test_list_legacy_run_dirs_returns_data_run_directories(tmp_path):
+    (tmp_path / "run_2_route_2").mkdir()
+    (tmp_path / "run_1_route_1").mkdir()
+    (tmp_path / "projects").mkdir()
+
+    runs = list_legacy_run_dirs(data_dir=tmp_path)
+
+    assert [run.name for run in runs] == ["run_2_route_2", "run_1_route_1"]
+
+
+def test_list_project_run_dirs_returns_project_runs(tmp_path):
+    runs_dir = tmp_path / "003" / "runs"
+    (runs_dir / "run_001_route_1").mkdir(parents=True)
+    (runs_dir / "run_002_route_2").mkdir()
+
+    runs = list_project_run_dirs("003", projects_dir=tmp_path)
+
+    assert [run.name for run in runs] == ["run_002_route_2", "run_001_route_1"]
+
+
+def test_data_projects_dir_points_under_data():
+    assert DATA_PROJECTS_DIR.name == "projects"
+    assert DATA_PROJECTS_DIR.parent.name == "data"
 
 
 from dashboard_streamlit import read_final_data_with_progress

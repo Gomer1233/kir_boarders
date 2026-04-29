@@ -4,6 +4,8 @@ import re
 
 import pandas as pd
 
+from scripts.project_registry import list_projects
+
 try:
     import streamlit as st
 except ModuleNotFoundError:
@@ -11,6 +13,7 @@ except ModuleNotFoundError:
 
 
 DATA_DIR = Path("data")
+DATA_PROJECTS_DIR = DATA_DIR / "projects"
 WEEK_COL = "\u041d\u0435\u0434\u0435\u043b\u044f\u0413\u043e\u0434"
 TS_COL = "\u0422\u0421"
 CATEGORY_COL = "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"
@@ -48,13 +51,28 @@ def sort_metric_columns(columns):
     return kir + other
 
 
-def list_run_dirs():
-    if not DATA_DIR.exists():
+def list_legacy_run_dirs(data_dir=DATA_DIR):
+    data_dir = Path(data_dir)
+    if not data_dir.exists():
         return []
     return sorted(
-        [path for path in DATA_DIR.iterdir() if path.is_dir() and path.name.startswith("run_")],
+        [path for path in data_dir.iterdir() if path.is_dir() and path.name.startswith("run_")],
         reverse=True,
     )
+
+
+def list_project_run_dirs(project_name, projects_dir=DATA_PROJECTS_DIR):
+    runs_dir = Path(projects_dir) / str(project_name) / "runs"
+    if not runs_dir.exists():
+        return []
+    return sorted(
+        [path for path in runs_dir.iterdir() if path.is_dir() and path.name.startswith("run_")],
+        reverse=True,
+    )
+
+
+def list_run_dirs():
+    return list_legacy_run_dirs(DATA_DIR)
 
 
 def run_file_paths(run_dir):
@@ -708,12 +726,25 @@ def main():
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.title("KIR Dashboard")
 
-    run_dirs = list_run_dirs()
-    if not run_dirs:
-        st.warning("No run directories found in data/.")
-        return
+    run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])
+    if run_source == "Legacy runs":
+        run_dirs = list_legacy_run_dirs()
+        if not run_dirs:
+            st.warning("No legacy run directories found in data/.")
+            return
+        run_dir = st.sidebar.selectbox("Run", run_dirs, format_func=lambda path: path.name)
+    else:
+        projects = list_projects(DATA_PROJECTS_DIR)
+        if not projects:
+            st.warning("No projects found in data/projects/.")
+            return
+        project_name = st.sidebar.selectbox("Project", projects)
+        run_dirs = list_project_run_dirs(project_name)
+        if not run_dirs:
+            st.warning(f"No runs found for project {project_name}.")
+            return
+        run_dir = st.sidebar.selectbox("Project run", run_dirs, format_func=lambda path: path.name)
 
-    run_dir = st.sidebar.selectbox("Run", run_dirs, format_func=lambda path: path.name)
     df = _load_run_dataframe(run_dir)
     if df is None:
         return
