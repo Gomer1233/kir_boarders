@@ -487,7 +487,6 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     store_series = filtered[FACTORY_COL] if FACTORY_COL in filtered.columns else None
     bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
     percentile_counts = percentile_store_counts(numeric_metric, custom_percentile=custom_percentile, store_series=store_series)
-    chart_data = sample_for_plot(filtered.assign(_metric=numeric_metric))
     chart_bin_table = bin_table
 
     collapse_tail = False
@@ -545,7 +544,6 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
         fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
         fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
         st.plotly_chart(fig, use_container_width=True)
-        st.plotly_chart(px.box(chart_data, y="_metric", points=False, title=f"Boxplot: {metric}"), use_container_width=True)
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; showing a basic Streamlit chart.")
         st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)

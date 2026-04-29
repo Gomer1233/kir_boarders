@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 
 from dashboard_streamlit import (
@@ -234,6 +236,13 @@ def test_sample_for_plot_limits_large_dataframes():
 
     assert len(sampled) == 10
     assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+
+
+def test_metric_analysis_does_not_render_boxplot():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+
+    assert "px.box" not in source
+    assert "Boxplot:" not in source
 
 
 from dashboard_streamlit import (
