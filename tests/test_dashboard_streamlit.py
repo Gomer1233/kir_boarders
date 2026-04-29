@@ -7,6 +7,7 @@ from dashboard_streamlit import (
     RELATIONSHIP_COLUMNS,
     build_bin_table,
     calculate_relationship_stats,
+    collapse_tail_bins,
     filter_zero_metric_values,
     format_percentile_card,
     get_numeric_metric_columns,
@@ -84,6 +85,35 @@ def test_format_percentile_card_separates_count_from_threshold():
 def test_metric_bar_value_column_prefers_unique_store_counts():
     assert metric_bar_value_column(pd.DataFrame({"count": [1], "store_count": [1]})) == "store_count"
     assert metric_bar_value_column(pd.DataFrame({"count": [1]})) == "count"
+
+
+def test_collapse_tail_bins_keeps_head_and_sums_remaining_bins():
+    table = pd.DataFrame(
+        {
+            "bin_start": [0, 10, 20, 30],
+            "bin_end": [10, 20, 30, 40],
+            "bin": ["0 - 10", "10 - 20", "20 - 30", "30 - 40"],
+            "count": [100, 50, 25, 10],
+            "store_count": [80, 40, 20, 8],
+            "share": [0.54, 0.27, 0.14, 0.05],
+        }
+    )
+
+    collapsed = collapse_tail_bins(table, head_bins=2)
+
+    assert collapsed["bin"].tolist() == ["0 - 10", "10 - 20", "Tail: >= 20"]
+    assert collapsed["count"].tolist() == [100, 50, 35]
+    assert collapsed["store_count"].tolist() == [80, 40, 28]
+    assert collapsed["share"].round(2).tolist() == [0.54, 0.27, 0.19]
+
+
+def test_collapse_tail_bins_returns_copy_when_head_covers_all_bins():
+    table = pd.DataFrame({"bin_start": [0, 10], "bin_end": [10, 20], "bin": ["0 - 10", "10 - 20"], "count": [1, 2]})
+
+    collapsed = collapse_tail_bins(table, head_bins=5)
+
+    assert collapsed.equals(table)
+    assert collapsed is not table
 
 
 def test_build_bin_table_counts_rows_per_interval():

@@ -159,6 +159,26 @@ def metric_bar_value_column(bin_table):
     return "store_count" if "store_count" in bin_table.columns else "count"
 
 
+def collapse_tail_bins(bin_table, head_bins):
+    if bin_table.empty:
+        return bin_table.copy()
+
+    head_bins = max(int(head_bins), 1)
+    if head_bins >= len(bin_table):
+        return bin_table.copy()
+
+    head = bin_table.head(head_bins).copy()
+    tail = bin_table.iloc[head_bins:].copy()
+    tail_row = tail.iloc[0].copy()
+    tail_row["bin_start"] = tail["bin_start"].iloc[0]
+    tail_row["bin_end"] = tail["bin_end"].iloc[-1]
+    tail_row["bin"] = f"Tail: >= {_clean_number(tail['bin_start'].iloc[0])}"
+    for column in ["count", "store_count", "share"]:
+        if column in tail.columns:
+            tail_row[column] = tail[column].sum()
+    return pd.concat([head, pd.DataFrame([tail_row])], ignore_index=True)
+
+
 def build_bin_table(series, bins=20):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -431,6 +451,25 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
     percentile_counts = percentile_store_counts(numeric_metric, custom_percentile=custom_percentile, store_series=store_series)
     chart_data = sample_for_plot(filtered.assign(_metric=numeric_metric))
+    chart_bin_table = bin_table
+
+    collapse_tail = False
+    if len(bin_table) > 3:
+        collapse_tail = st.checkbox(
+            "Collapse long tail on bin chart",
+            value=False,
+            help="Only affects the chart. The full bin table below stays unchanged.",
+        )
+        if collapse_tail:
+            head_bins = st.number_input(
+                "Bins to keep before tail",
+                min_value=1,
+                max_value=len(bin_table) - 1,
+                value=min(30, len(bin_table) - 1),
+                step=1,
+            )
+            chart_bin_table = collapse_tail_bins(bin_table, head_bins)
+            st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
     pc1, pc2, pc3 = st.columns(3)
     for container, card in zip(
@@ -450,7 +489,7 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
 
         bar_value_column = metric_bar_value_column(bin_table)
         fig = px.bar(
-            bin_table,
+            chart_bin_table,
             x="bin_start",
             y=bar_value_column,
             text=bar_value_column,
