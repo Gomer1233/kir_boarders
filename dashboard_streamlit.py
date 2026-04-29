@@ -7,7 +7,13 @@ import pandas as pd
 
 from main_final_v3 import load_config
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
-from scripts.upload_runner import UPLOAD_MANIFEST_NAME, run_project_routes, save_uploaded_route_files
+from scripts.upload_runner import (
+    KIR_SOURCE_NAME,
+    POTERI_SOURCE_NAME,
+    UPLOAD_MANIFEST_NAME,
+    run_project_routes,
+    save_uploaded_route_files,
+)
 
 try:
     import streamlit as st
@@ -87,6 +93,11 @@ def load_upload_manifest(project_name, route_name, projects_dir=DATA_PROJECTS_DI
     if not manifest_path.exists():
         return None
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def project_route_uploads_exist(project_name, route_name, projects_dir=DATA_PROJECTS_DIR):
+    upload_dir = Path(projects_dir) / str(project_name) / "uploads" / route_name
+    return (upload_dir / KIR_SOURCE_NAME).exists() and (upload_dir / POTERI_SOURCE_NAME).exists()
 
 
 def list_run_dirs():
@@ -878,6 +889,23 @@ def main():
             ]:
                 if st.button(label):
                     try:
+                        for route_name in routes:
+                            kir_file = st.session_state.get(f"{route_name}_kir_upload")
+                            poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
+                            if kir_file and poteri_file:
+                                save_uploaded_route_files(
+                                    run_project,
+                                    route_name,
+                                    kir_file,
+                                    poteri_file,
+                                    base_dir=DATA_PROJECTS_DIR,
+                                )
+                            if not project_route_uploads_exist(run_project, route_name):
+                                st.error(
+                                    f"Upload KIR and Poteri files for {route_label(route_name)} first, "
+                                    "or click the Save uploads button."
+                                )
+                                st.stop()
                         with st.spinner(f"Running {', '.join(routes)} for {run_project}..."):
                             results = run_project_routes(
                                 run_project,

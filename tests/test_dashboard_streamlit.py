@@ -27,6 +27,7 @@ from dashboard_streamlit import (
     metric_bar_value_column,
     network_chart_color,
     normalize_new_project_input,
+    project_route_uploads_exist,
     routes_for_ui_mode,
     sort_metric_columns,
     project_select_options,
@@ -344,6 +345,18 @@ def test_load_upload_manifest_reads_saved_upload_metadata(tmp_path):
 
     assert manifest["kir_original_name"] == "kir.xlsx"
     assert manifest["poteri_original_name"] == "poteri.xlsx"
+
+
+def test_project_route_uploads_exist_requires_both_stable_source_files(tmp_path):
+    upload_dir = tmp_path / "950" / "uploads" / "route_1"
+    upload_dir.mkdir(parents=True)
+    (upload_dir / "kir_source.xlsx").write_bytes(b"kir")
+
+    assert project_route_uploads_exist("950", "route_1", projects_dir=tmp_path) is False
+
+    (upload_dir / "poteri_source.xlsx").write_bytes(b"poteri")
+
+    assert project_route_uploads_exist("950", "route_1", projects_dir=tmp_path) is True
 
 
 def test_latest_project_run_name_returns_newest_run(tmp_path):
