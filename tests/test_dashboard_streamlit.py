@@ -341,7 +341,7 @@ def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():
 
     result = first_bins_summary(metric, bin_table, 2, store_series=stores)
 
-    assert result == {"bins_used": 2, "store_sum": 3, "row_sum": 4}
+    assert result == {"bins_used": 2, "store_sum": 3, "total_stores": 4, "store_share": 0.75}
 
 
 def test_percentile_store_counts_counts_unique_stores_when_store_series_is_provided():
