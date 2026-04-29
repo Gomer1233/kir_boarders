@@ -9,6 +9,7 @@ from dashboard_streamlit import (
     FILTER_COLUMNS,
     format_run_result,
     format_running_message,
+    dashboard_run_label,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
@@ -374,6 +375,10 @@ def test_latest_project_run_name_returns_newest_run(tmp_path):
     (runs_dir / "run_002_route_2").mkdir()
 
     assert latest_project_run_name("003", projects_dir=tmp_path) == "run_002_route_2"
+
+
+def test_dashboard_run_label_uses_run_folder_name():
+    assert dashboard_run_label(Path("data/projects/083/runs/run_002_route_1")) == "run_002_route_1"
 
 
 from dashboard_streamlit import read_final_data_with_progress

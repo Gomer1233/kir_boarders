@@ -163,6 +163,10 @@ def download_file_name(path, run_dir):
     return f"{Path(run_dir).name}_{Path(path).name}"
 
 
+def dashboard_run_label(run_dir):
+    return Path(run_dir).name
+
+
 def read_file_for_download(path, mtime_ns):
     path = Path(path)
     if not path.exists():
@@ -968,29 +972,38 @@ def main():
                         progress_bar.progress(100, text="Pipeline finished.")
                         for result in results:
                             st.success(format_run_result(result))
+                        if results:
+                            st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
                     except Exception as exc:
                         st.exception(exc)
                     finally:
                         st.session_state["pipeline_running"] = False
 
-    st.sidebar.divider()
-    run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])
-    if run_source == "Legacy runs":
-        run_dirs = list_legacy_run_dirs()
-        if not run_dirs:
-            st.warning("No legacy run directories found in data/.")
+        with st.sidebar.expander("3. Open dashboard", expanded=True):
+            st.caption("Откройте дашборд только после готового прогона. Выбор run-а сам по себе данные не загружает.")
+            run_dirs = list_project_run_dirs(selected_project)
+            if not run_dirs:
+                st.info("Для выбранного проекта пока нет готовых прогонов.")
+            else:
+                selected_run = st.selectbox(
+                    "Ready run",
+                    run_dirs,
+                    format_func=dashboard_run_label,
+                    disabled=is_running,
+                )
+                if st.button("Open dashboard", disabled=is_running):
+                    st.session_state["opened_run_dir"] = str(selected_run)
+
+    opened_run_dir = st.session_state.get("opened_run_dir")
+    if not opened_run_dir:
+        st.info("Выберите проект, загрузите файлы, выполните прогон и нажмите Open dashboard для готового run-а.")
+        return
+    run_dir = Path(opened_run_dir)
+    if selected_project and DATA_PROJECTS_DIR in run_dir.parents:
+        expected_project_dir = DATA_PROJECTS_DIR / selected_project
+        if expected_project_dir not in run_dir.parents:
+            st.info("Выбран другой проект. Нажмите Open dashboard для run-а текущего проекта.")
             return
-        run_dir = st.sidebar.selectbox("Run", run_dirs, format_func=lambda path: path.name)
-    else:
-        if not current_projects:
-            st.warning("No projects found in data/projects/.")
-            return
-        project_name = st.sidebar.selectbox("Project", current_projects)
-        run_dirs = list_project_run_dirs(project_name)
-        if not run_dirs:
-            st.warning(f"No runs found for project {project_name}.")
-            return
-        run_dir = st.sidebar.selectbox("Project run", run_dirs, format_func=lambda path: path.name)
 
     df = _load_run_dataframe(run_dir)
     if df is None:
