@@ -277,8 +277,8 @@ def percentile_store_counts(series, custom_percentile, store_series=None):
 
     def make_item(percentile):
         threshold = float(source["metric"].quantile(percentile / 100))
-        below = source[source["metric"] <= threshold]
-        count = int(below["store"].nunique()) if "store" in below.columns else int(len(below))
+        above = source[source["metric"] >= threshold]
+        count = int(above["store"].nunique()) if "store" in above.columns else int(len(above))
         return {
             "percentile": percentile,
             "threshold": threshold,
@@ -475,9 +475,9 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     for container, card in zip(
         [pc1, pc2, pc3],
         [
-            format_percentile_card("Stores <= P25", percentile_counts["p25"]),
-            format_percentile_card("Stores <= P85", percentile_counts["p85"]),
-            format_percentile_card(f"Stores <= P{custom_percentile}", percentile_counts["custom"]),
+            format_percentile_card("Stores >= P25", percentile_counts["p25"]),
+            format_percentile_card("Stores >= P85", percentile_counts["p85"]),
+            format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"]),
         ],
     ):
         container.markdown(f"**{card['label']}**")

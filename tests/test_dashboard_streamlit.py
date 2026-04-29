@@ -77,9 +77,9 @@ def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
 
 
 def test_format_percentile_card_separates_count_from_threshold():
-    card = format_percentile_card("Stores <= P85", {"count": 21140, "threshold": 4197.33})
+    card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33})
 
-    assert card == {"label": "Stores <= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+    assert card == {"label": "Stores >= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
 
 
 def test_metric_bar_value_column_prefers_unique_store_counts():
@@ -250,13 +250,13 @@ def test_adjust_bin_width_uses_explicit_button_steps_and_never_goes_below_minimu
     assert adjust_bin_width(5, -10) == 1
 
 
-def test_percentile_store_counts_counts_values_below_thresholds():
+def test_percentile_store_counts_counts_values_at_or_above_thresholds():
     result = percentile_store_counts(pd.Series([0, 10, 20, 30]), custom_percentile=50)
 
     assert result["p25"]["percentile"] == 25
-    assert result["p25"]["count"] == 1
+    assert result["p25"]["count"] == 3
     assert result["p85"]["percentile"] == 85
-    assert result["p85"]["count"] == 3
+    assert result["p85"]["count"] == 1
     assert result["custom"]["percentile"] == 50
     assert result["custom"]["count"] == 2
 
@@ -323,4 +323,4 @@ def test_percentile_store_counts_counts_unique_stores_when_store_series_is_provi
         store_series=pd.Series(["A", "A", "B", "C"]),
     )
 
-    assert result["custom"]["count"] == 1
+    assert result["custom"]["count"] == 2
