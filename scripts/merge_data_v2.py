@@ -18,7 +18,7 @@ def normalize_week(week_val):
 
 
 def process(svod_path, poteri_path, output_path, target_col,
-            svod_cols, poteri_cols):
+            svod_cols, poteri_cols, use_category=True):
     """
     Объединяет данные свода и потерь, нормализует ключи и фильтрует пустые значения.
     
@@ -29,8 +29,9 @@ def process(svod_path, poteri_path, output_path, target_col,
         target_col: целевой столбец (КИР-ХХХ)
         svod_cols: dict с колонками для svod (week, ts, factory, category)
         poteri_cols: dict с колонками для poteri (week, ts, factory, category, rename_map)
+        use_category: использовать ли столбец Категория (для route_2 = False)
     """
-    warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
+    warnings.filterwarnings('ignore', category=UserWarning, module='openpy_excel')
     
     print(f"Загрузка данных: {svod_path} и {poteri_path}...")
     df_svod = pd.read_excel(svod_path)
@@ -71,12 +72,20 @@ def process(svod_path, poteri_path, output_path, target_col,
         df_poteri = df_poteri.drop(columns=[poteri_week])
     
     # === ОЧИСТКА ТЕКСТОВЫХ ПОЛЕЙ ===
-    text_cols_svod = [svod_ts, svod_category, svod_factory]
+    text_cols_svod = [svod_ts, svod_factory]
+    if use_category and svod_category in df_svod.columns:
+        text_cols_svod.append(svod_category)
+        df_svod[svod_category] = df_svod[svod_category].astype(str).str.strip()
+
+    text_cols_poteri = [poteri_ts, poteri_factory]
+    if use_category and poteri_category in df_poteri.columns:
+        text_cols_poteri.append(poteri_category)
+        df_poteri[poteri_category] = df_poteri[poteri_category].astype(str).str.strip()
+    
     for col in text_cols_svod:
         if col in df_svod.columns:
             df_svod[col] = df_svod[col].astype(str).str.strip()
 
-    text_cols_poteri = [poteri_ts, poteri_category, poteri_factory]
     for col in text_cols_poteri:
         if col in df_poteri.columns:
             df_poteri[col] = df_poteri[col].astype(str).str.strip()
@@ -90,16 +99,39 @@ def process(svod_path, poteri_path, output_path, target_col,
     missing = [c for c in expected_cols if c not in poteri_to_merge.columns]
     if missing:
         print(f"⚠️  ВНИМАНИЕ: После переименования не найдены столбцы: {missing}")
-    print(f"Объединение данных по ключам: {COMMON_WEEK}, {COMMON_TS}, {COMMON_FACTORY}, {COMMON_CATEGORY}...")
+    print(f"Объединение данных по ключам: {COMMON_WEEK}, {COMMON_TS}, {COMMON_FACTORY}, {COMMON_CATEGORY if use_category else ''}...")
     
     # Формируем список колонок для merge
-    poteri_merge_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY, COMMON_CATEGORY] + expected_cols
+    if use_category:
+        poteri_merge_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY, COMMON_CATEGORY] + expected_cols
+    else:
+        poteri_merge_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY] + expected_cols
+
     poteri_merge_cols = [c for c in poteri_merge_cols if c in poteri_to_merge.columns]
 
+    # Формируем список колонок для merge из svod
+    # 1. Сначала добавляем ключевые колонки (по которым мержим)
+    if use_category:
+        svod_merge_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY, COMMON_CATEGORY]
+    else:
+        svod_merge_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY]
+
+    # 2. Добавляем все числовые столбцы из svod (кроме ключевых)
+    numeric_cols = df_svod.select_dtypes(include=['number']).columns.tolist()
+    key_cols = [COMMON_WEEK, COMMON_TS, COMMON_FACTORY]
+    if use_category:
+        key_cols.append(COMMON_CATEGORY)
+    for col in numeric_cols:
+        if col not in key_cols and col not in svod_merge_cols:
+            svod_merge_cols.append(col)
+
+    # Убираем колонки, которых нет в данных
+    svod_merge_cols = [c for c in svod_merge_cols if c in df_svod.columns]
+
     result = pd.merge(
-        df_svod, 
+        df_svod[svod_merge_cols],
         poteri_to_merge[poteri_merge_cols],
-        on=[COMMON_WEEK, COMMON_TS, COMMON_FACTORY, COMMON_CATEGORY],
+        on=[COMMON_WEEK, COMMON_TS, COMMON_FACTORY] + ([COMMON_CATEGORY] if use_category else []),
         how='left'
     )
 
@@ -110,7 +142,6 @@ def process(svod_path, poteri_path, output_path, target_col,
         print(f"- Удалено строк с NaN: {before_drop - len(result)}")
     else:
         print(f"❌ ВНИМАНИЕ: Столбец {target_col} не найден!")
-    
     print(f"Сохранение в {output_path}...")
     result.to_excel(output_path, index=False)
     return output_path

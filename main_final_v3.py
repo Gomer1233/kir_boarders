@@ -1,14 +1,14 @@
 """
-KIR-Анализатор v3.2 - Universally configurable pipeline
-Исправлена ошибка с отступами
+KIR-Анализатор v3.3 - Universally configurable pipeline
+Исправлена логика запуска: всегда merge, затем clean, затем dashboard
 """
 
 import yaml
 import os
 import sys
-import subprocess
 from scripts.merge_data_v2 import process as run_merge
 from scripts.cleaner_v2 import split_outliers_multi, pre_clean
+from scripts.dashboard_tkinter import KIRDashboard
 
 
 def load_config():
@@ -38,14 +38,16 @@ def get_next_run_number(base_dir):
 def get_route_config(config, route_name):
     """Возвращает конфигурацию для указанного маршрута"""
     route_dir = config['inputs'][route_name]
+    routes_config = config.get('routes', {})
 
     if route_name == 'route_1':
         return {
             'svod': os.path.join(route_dir, 'kir_with_cats.xlsx'),
             'poteri': os.path.join(route_dir, 'poteri_with_cats.xlsx'),
             'group_cols': config['grouping']['with_cats'],
-            'svod_cols': config['columns']['svod'],      # ← добавлено
-            'poteri_cols': config['columns']['poteri'],  # ← добавлено
+            'svod_cols': config['columns']['svod'],
+            'poteri_cols': config['columns']['poteri'],
+            'use_category': routes_config.get('route_1', {}).get('use_category', True),
             'desc': 'Маршрут 1 (с категориями)'
         }
     else:  # route_2
@@ -53,8 +55,9 @@ def get_route_config(config, route_name):
             'svod': os.path.join(route_dir, 'kir_without_cats.xlsx'),
             'poteri': os.path.join(route_dir, 'poteri_without_cats.xlsx'),
             'group_cols': config['grouping']['without_cats'],
-            'svod_cols': config['columns']['svod'],      # ← добавлено
-            'poteri_cols': config['columns']['poteri'],  # ← добавлено
+            'svod_cols': config['columns']['svod'],
+            'poteri_cols': config['columns']['poteri'],
+            'use_category': routes_config.get('route_2', {}).get('use_category', False),
             'desc': 'Маршрут 2 (без категорий)'
         }
 
@@ -106,29 +109,31 @@ def main():
 
         try:
             clean_conf = config['cleaning']
-            clean_columns = config['columns']['clean_columns']  # ← добавлено
+
+            print('\n[ШАГ 1/3] Объединение данных...')
+            run_merge(
+                os.path.abspath(route_conf['svod']),
+                os.path.abspath(route_conf['poteri']),
+                paths['merged'],
+                target_col,
+                svod_cols=route_conf['svod_cols'],
+                poteri_cols=route_conf['poteri_cols'],
+                use_category=route_conf['use_category']
+            )
+
+            print('\n[ШАГ 2/3] Очистка мусора и выбросов...')
 
             if clean_conf.get('remove_zeros', True) or clean_conf.get('remove_empty_cols'):
-                print('\n[ШАГ 0/3] Очистка мусора (нули/пустые)...')
+                print('[ШАГ 2.1/3] Очистка нулей и пустых...')
                 pre_clean(
-                    input_file=route_conf['svod'],
+                    input_file=paths['merged'],
                     output_file=paths['merged'],
                     target_col=target_col,
                     remove_zeros=clean_conf.get('remove_zeros', True),
                     remove_empty_cols=clean_conf.get('remove_empty_cols', [])
                 )
-            else:
-                print('\n[ШАГ 1/3] Объединение данных...')
-                run_merge(
-                    os.path.abspath(route_conf['svod']),
-                    os.path.abspath(route_conf['poteri']),
-                    paths['merged'],
-                    target_col,
-                    svod_cols=route_conf['svod_cols'],
-                    poteri_cols=route_conf['poteri_cols']
-                )
 
-            print('\n[ШАГ 2/3] Очистка выбросов...')
+            print('\n[ШАГ 2.2/3] Очистка выбросов...')
             cl_conf = config['cleaning']
             
             split_outliers_multi(
@@ -145,9 +150,8 @@ def main():
             )
 
             print(f'\n[ШАГ 3/3] Запуск дашборда...')
-            db_script = os.path.abspath("scripts/db.py")
-            subprocess.Popen([sys.executable, db_script, paths['final']], shell=False)
-            print(f"Дашборд запущен для файла: {os.path.basename(paths['final'])}")
+            dashboard = KIRDashboard(paths['final'])
+            dashboard.run()
 
         except Exception as e:
             print(f'ОШИБКА ПРОЦЕССА: {e}')
@@ -161,4 +165,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
