@@ -166,6 +166,8 @@ from dashboard_streamlit import (
     adjust_bin_width,
     build_bin_table_by_width,
     default_bin_width,
+    filter_visual_outliers,
+    relationship_chart_rows,
     percentile_store_counts,
     split_by_network,
 )
@@ -208,6 +210,24 @@ def test_split_by_network_returns_one_frame_per_ts():
 
     assert [name for name, _ in groups] == ["A", "B"]
     assert [len(group) for _, group in groups] == [1, 2]
+
+
+def test_filter_visual_outliers_trims_extreme_x_and_y_values_without_mutating_source():
+    df = pd.DataFrame({"_metric": [1, 2, 3, 1000], WRITEOFFS: [10, 20, 30, 9999]})
+
+    filtered = filter_visual_outliers(df, "_metric", WRITEOFFS, quantile=0.75)
+
+    assert filtered["_metric"].tolist() == [1, 2, 3]
+    assert df["_metric"].tolist() == [1, 2, 3, 1000]
+
+
+def test_relationship_chart_rows_group_networks_side_by_side_per_comparison_metric():
+    rows = relationship_chart_rows(["TC Perekrestok", "TC Pyaterochka"], [WRITEOFFS, REVENUE])
+
+    assert rows == [
+        {"comparison": WRITEOFFS, "networks": ["TC Perekrestok", "TC Pyaterochka"]},
+        {"comparison": REVENUE, "networks": ["TC Perekrestok", "TC Pyaterochka"]},
+    ]
 
 
 

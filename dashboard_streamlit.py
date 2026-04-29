@@ -239,6 +239,23 @@ def split_by_network(df):
     return [(str(name), group.copy()) for name, group in sorted(df.groupby(TS_COL, dropna=False), key=lambda item: str(item[0]))]
 
 
+def filter_visual_outliers(df, x_col, y_col, quantile=0.99):
+    source = df.copy()
+    x_values = pd.to_numeric(source[x_col], errors="coerce")
+    y_values = pd.to_numeric(source[y_col], errors="coerce")
+    pair = pd.DataFrame({"x": x_values, "y": y_values}).dropna()
+    if pair.empty:
+        return source.iloc[0:0].copy()
+
+    x_limit = float(pair["x"].quantile(quantile))
+    y_limit = float(pair["y"].quantile(quantile))
+    return source[(x_values <= x_limit) & (y_values <= y_limit)].copy()
+
+
+def relationship_chart_rows(network_names, relationship_columns):
+    return [{"comparison": column, "networks": list(network_names)} for column in relationship_columns]
+
+
 def _frange(start, stop, step):
     values = []
     value = start
@@ -432,23 +449,50 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         st.info("No poteri numeric columns found for relationship analysis.")
         return
 
+    hide_outliers = st.checkbox("Hide visual outliers", value=False)
+    outlier_percentile = st.slider(
+        "Visible percentile cutoff",
+        min_value=90,
+        max_value=100,
+        value=99,
+        disabled=not hide_outliers,
+        help="Only affects charts. Source rows and calculations are not deleted.",
+    )
+
     try:
         import plotly.express as px
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; relationship scatter plots are unavailable.")
         return
 
-    for network_name, network_df in split_by_network(filtered.assign(_metric=numeric_metric)):
-        st.markdown(f"### {network_name}")
-        stats = calculate_relationship_stats(network_df, metric, available)
-        st.dataframe(stats, use_container_width=True)
+    networks = split_by_network(filtered.assign(_metric=numeric_metric))
+    if not networks:
+        st.info("No rows available for relationship analysis after filters.")
+        return
 
-        chart_df = sample_for_plot(network_df)
-        for column in available:
-            st.plotly_chart(
-                px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=f"{network_name}: {metric} vs {column}"),
-                use_container_width=True,
-            )
+    network_names = [name for name, _ in networks]
+    for network_name, network_df in networks:
+        stats = calculate_relationship_stats(network_df, metric, available)
+        with st.expander(f"Correlation stats: {network_name}", expanded=False):
+            st.dataframe(stats, use_container_width=True)
+
+    network_by_name = {name: df for name, df in networks}
+    for row in relationship_chart_rows(network_names, available):
+        column = row["comparison"]
+        st.markdown(f"### {metric} vs {column}")
+        chart_columns = st.columns(len(row["networks"]))
+        for container, network_name in zip(chart_columns, row["networks"]):
+            network_df = network_by_name[network_name]
+            if hide_outliers:
+                network_df = filter_visual_outliers(network_df, "_metric", column, quantile=outlier_percentile / 100)
+            chart_df = sample_for_plot(network_df)
+            with container:
+                st.plotly_chart(
+                    px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=network_name),
+                    use_container_width=True,
+                )
+                if hide_outliers:
+                    st.caption(f"Visual cutoff: P{outlier_percentile}; shown {len(chart_df):,} points.")
 
 
 def _render_problem_rows_tab(filtered):
