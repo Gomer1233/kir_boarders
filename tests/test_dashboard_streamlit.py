@@ -250,11 +250,11 @@ def test_adjust_bin_width_uses_explicit_button_steps_and_never_goes_below_minimu
     assert adjust_bin_width(5, -10) == 1
 
 
-def test_percentile_store_counts_counts_values_at_or_above_thresholds():
+def test_percentile_store_counts_counts_low_p25_and_high_upper_thresholds():
     result = percentile_store_counts(pd.Series([0, 10, 20, 30]), custom_percentile=50)
 
     assert result["p25"]["percentile"] == 25
-    assert result["p25"]["count"] == 3
+    assert result["p25"]["count"] == 1
     assert result["p85"]["percentile"] == 85
     assert result["p85"]["count"] == 1
     assert result["custom"]["percentile"] == 50
