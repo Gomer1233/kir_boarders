@@ -83,3 +83,12 @@ def test_calculate_relationship_stats_returns_correlations():
     assert stats.loc[stats["comparison"] == WRITEOFFS, "pearson"].iloc[0] == 1.0
     assert stats.loc[stats["comparison"] == REVENUE, "pearson"].iloc[0] == -1.0
     assert stats["rows_used"].tolist() == [4, 4]
+
+
+from dashboard_streamlit import format_week_label
+
+
+def test_format_week_label_handles_excel_float_week():
+    assert format_week_label(202607.0) == "07.2026"
+    assert format_week_label("202608.0") == "08.2026"
+    assert format_week_label("2026.09") == "09.2026"

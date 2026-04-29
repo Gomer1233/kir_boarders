@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -45,6 +46,22 @@ def list_run_dirs():
         [path for path in DATA_DIR.iterdir() if path.is_dir() and path.name.startswith("run_")],
         reverse=True,
     )
+
+
+def format_week_label(value):
+    text = str(value).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+
+    compact_match = re.fullmatch(r"(\d{4})(\d{2})", text)
+    if compact_match:
+        return f"{compact_match.group(2)}.{compact_match.group(1)}"
+
+    dotted_match = re.fullmatch(r"(\d{4})[./-](\d{1,2})", text)
+    if dotted_match:
+        return f"{int(dotted_match.group(2)):02d}.{dotted_match.group(1)}"
+
+    return str(value)
 
 
 def metric_summary(series):
@@ -115,7 +132,8 @@ def _apply_sidebar_filters(df):
         if column not in filtered.columns:
             continue
         options = sorted(filtered[column].dropna().unique().tolist())
-        selected = st.sidebar.multiselect(column, options)
+        format_func = format_week_label if column == WEEK_COL else str
+        selected = st.sidebar.multiselect(column, options, format_func=format_func)
         if selected:
             filtered = filtered[filtered[column].isin(selected)]
     return filtered
