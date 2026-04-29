@@ -69,7 +69,20 @@ def _read_excel_cached(path, mtime_ns):
 
 
 if st is not None:
-    _read_excel_cached = st.cache_data(show_spinner="Loading final_clean_data.xlsx...")(_read_excel_cached)
+    _read_excel_cached = st.cache_data(show_spinner=False)(_read_excel_cached)
+
+
+def read_final_data_with_progress(path, mtime_ns, read_func=None, progress_factory=None):
+    read_func = read_func or _read_excel_cached
+    progress_factory = progress_factory or st.progress
+    progress_bar = progress_factory(0, text="Starting dashboard load...")
+    progress_bar.progress(10, text="Preparing final_clean_data.xlsx...")
+    progress_bar.progress(35, text="Reading Excel file. First load can take a while...")
+    df = read_func(str(path), mtime_ns)
+    progress_bar.progress(90, text="Preparing dashboard data...")
+    progress_bar.progress(100, text="Dashboard data loaded.")
+    progress_bar.empty()
+    return df
 
 
 def sample_for_plot(df, max_rows=20000):
@@ -290,7 +303,7 @@ def _load_run_dataframe(run_dir):
     if not final_path.exists():
         st.error(f"Missing final file: {final_path}")
         return None
-    return _read_excel_cached(str(final_path), final_path.stat().st_mtime_ns)
+    return read_final_data_with_progress(final_path, final_path.stat().st_mtime_ns)
 
 
 def _render_quality_cards(filtered, numeric_metric):

@@ -106,6 +106,39 @@ def test_run_file_paths_returns_final_and_raw_paths(tmp_path):
     }
 
 
+from dashboard_streamlit import read_final_data_with_progress
+
+
+def test_read_final_data_with_progress_shows_loading_steps(tmp_path):
+    calls = []
+
+    class FakeProgress:
+        def progress(self, value, text=None):
+            calls.append((value, text))
+
+        def empty(self):
+            calls.append(("empty", None))
+
+    def fake_read(path, mtime_ns):
+        calls.append(("read", path, mtime_ns))
+        return pd.DataFrame({"value": [1]})
+
+    path = tmp_path / "final_clean_data.xlsx"
+    path.write_text("placeholder")
+
+    df = read_final_data_with_progress(path, 123, read_func=fake_read, progress_factory=lambda value, text: FakeProgress())
+
+    assert df["value"].tolist() == [1]
+    assert calls == [
+        (10, "Preparing final_clean_data.xlsx..."),
+        (35, "Reading Excel file. First load can take a while..."),
+        ("read", str(path), 123),
+        (90, "Preparing dashboard data..."),
+        (100, "Dashboard data loaded."),
+        ("empty", None),
+    ]
+
+
 from dashboard_streamlit import DASHBOARD_SCREENS, sample_for_plot
 
 
