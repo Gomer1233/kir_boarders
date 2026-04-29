@@ -1,4 +1,5 @@
 from pathlib import Path
+from html import escape
 import re
 
 import pandas as pd
@@ -153,6 +154,28 @@ def format_percentile_card(label, item):
         "count": f"{int(item['count']):,}",
         "threshold": f"Threshold: {_format_number(item['threshold'])}",
     }
+
+
+def render_percentile_card_html(card, color):
+    label = escape(str(card["label"]))
+    count = escape(str(card["count"]))
+    threshold = escape(str(card["threshold"]))
+    color = escape(str(color))
+    return f"""
+    <div style="
+        border: 1px solid {color};
+        border-left: 7px solid {color};
+        border-radius: 14px;
+        padding: 16px 18px;
+        background: linear-gradient(135deg, color-mix(in srgb, {color} 18%, transparent), rgba(255,255,255,0.025));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+        min-height: 132px;
+    ">
+        <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
+        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">{count}</div>
+        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.62); margin-top: 18px;">{threshold}</div>
+    </div>
+    """
 
 
 def metric_bar_value_column(bin_table):
@@ -521,17 +544,16 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
             st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
     pc1, pc2, pc3 = st.columns(3)
-    for container, card in zip(
+    for container, card, color in zip(
         [pc1, pc2, pc3],
         [
             format_percentile_card("Stores <= P25", percentile_counts["p25"]),
             format_percentile_card("Stores >= P85", percentile_counts["p85"]),
             format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"]),
         ],
+        ["#2fbf71", "#ff4d4d", "#f59f00"],
     ):
-        container.markdown(f"**{card['label']}**")
-        container.markdown(f"### {card['count']}")
-        container.caption(card["threshold"])
+        container.markdown(render_percentile_card_html(card, color), unsafe_allow_html=True)
 
     try:
         import plotly.express as px

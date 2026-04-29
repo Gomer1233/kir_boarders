@@ -12,6 +12,7 @@ from dashboard_streamlit import (
     collapse_tail_bins,
     filter_zero_metric_values,
     format_percentile_card,
+    render_percentile_card_html,
     get_numeric_metric_columns,
     prepare_bin_chart_table,
     metric_summary,
@@ -84,6 +85,17 @@ def test_format_percentile_card_separates_count_from_threshold():
     card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33})
 
     assert card == {"label": "Stores >= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+
+
+def test_render_percentile_card_html_includes_soft_percentile_color():
+    card = {"label": "Stores >= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+
+    html = render_percentile_card_html(card, "#ff4d4d")
+
+    assert "Stores &gt;= P85" in html
+    assert "21,140" in html
+    assert "Threshold: 4,197.33" in html
+    assert "#ff4d4d" in html
 
 
 def test_metric_bar_value_column_prefers_unique_store_counts():
