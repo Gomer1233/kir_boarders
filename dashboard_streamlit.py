@@ -206,6 +206,20 @@ def _adjust_session_bin_width(key, delta):
     st.session_state[key] = adjust_bin_width(st.session_state.get(key, 1), delta)
 
 
+def first_bins_store_sum(bin_table, n_bins):
+    if bin_table.empty:
+        return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
+
+    bins_used = min(max(int(n_bins), 0), len(bin_table))
+    first_bins = bin_table.head(bins_used)
+    store_column = "store_count" if "store_count" in first_bins.columns else "count"
+    return {
+        "bins_used": bins_used,
+        "store_sum": int(first_bins[store_column].sum()),
+        "row_sum": int(first_bins["count"].sum()) if "count" in first_bins.columns else 0,
+    }
+
+
 def percentile_store_counts(series, custom_percentile, store_series=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -421,6 +435,14 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
         st.warning("Plotly is not installed; showing a basic Streamlit chart.")
         st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)
     st.subheader("Bin table")
+    if not bin_table.empty:
+        max_bins = len(bin_table)
+        n_bins = st.number_input("Sum first N bins", min_value=1, max_value=max_bins, value=min(3, max_bins), step=1)
+        first_bins = first_bins_store_sum(bin_table, n_bins)
+        sum_col1, sum_col2, sum_col3 = st.columns(3)
+        sum_col1.metric("First bins used", first_bins["bins_used"])
+        sum_col2.metric("Stores in first bins", first_bins["store_sum"])
+        sum_col3.metric("Rows in first bins", first_bins["row_sum"])
     st.dataframe(bin_table, use_container_width=True)
 
 

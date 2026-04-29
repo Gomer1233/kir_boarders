@@ -167,6 +167,7 @@ from dashboard_streamlit import (
     build_bin_table_by_width,
     default_bin_width,
     filter_visual_outliers,
+    first_bins_store_sum,
     relationship_chart_rows,
     percentile_store_counts,
     split_by_network,
@@ -240,6 +241,22 @@ def test_build_bin_table_by_width_counts_unique_stores_when_store_series_is_prov
 
     assert table["count"].tolist() == [3, 1]
     assert table["store_count"].tolist() == [2, 1]
+
+
+def test_first_bins_store_sum_uses_store_count_when_available():
+    table = pd.DataFrame({"count": [100, 50, 25], "store_count": [10, 5, 2]})
+
+    result = first_bins_store_sum(table, 2)
+
+    assert result == {"bins_used": 2, "store_sum": 15, "row_sum": 150}
+
+
+def test_first_bins_store_sum_clamps_requested_bin_count_to_table_size():
+    table = pd.DataFrame({"count": [100, 50]})
+
+    result = first_bins_store_sum(table, 10)
+
+    assert result == {"bins_used": 2, "store_sum": 150, "row_sum": 150}
 
 
 def test_percentile_store_counts_counts_unique_stores_when_store_series_is_provided():
