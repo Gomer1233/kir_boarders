@@ -122,9 +122,11 @@ def metric_summary(series):
             "median": None,
             "p25": None,
             "p85": None,
+            "zero_count": 0,
             "zero_share": 0,
             "missing_share": 1 if total_count else 0,
         }
+    zero_count = int(valid.eq(0).sum())
     return {
         "count": int(valid_count),
         "min": float(valid.min()),
@@ -133,9 +135,16 @@ def metric_summary(series):
         "median": float(valid.median()),
         "p25": float(valid.quantile(0.25)),
         "p85": float(valid.quantile(0.85)),
-        "zero_share": float(valid.eq(0).sum() / valid_count),
+        "zero_count": zero_count,
+        "zero_share": float(zero_count / valid_count),
         "missing_share": float(numeric.isna().sum() / total_count) if total_count else 0,
     }
+
+
+def filter_zero_metric_values(df, numeric_metric):
+    numeric = pd.to_numeric(numeric_metric, errors="coerce")
+    mask = ~numeric.eq(0)
+    return df.loc[mask].copy(), numeric.loc[mask]
 
 
 def build_bin_table(series, bins=20):
@@ -368,12 +377,24 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
 
 def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     st.subheader("Metric analysis")
+    original_summary = metric_summary(numeric_metric)
+    hide_zero_values = st.checkbox(
+        "Hide zero metric values",
+        value=False,
+        help="Only affects this Metric analysis screen. Source rows are not changed.",
+    )
+    if hide_zero_values:
+        filtered, numeric_metric = filter_zero_metric_values(filtered, numeric_metric)
+
     summary = metric_summary(numeric_metric)
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Count", summary["count"])
     c2.metric("Mean", _format_number(summary["mean"]))
     c3.metric("Median", _format_number(summary["median"]))
     c4.metric("P85", _format_number(summary["p85"]))
+    c5.metric("Zero values", original_summary["zero_count"])
+    if hide_zero_values:
+        st.caption(f"Hidden zero rows on this screen: {original_summary['zero_count']:,}")
 
     stats_df = pd.DataFrame([summary])
     st.dataframe(stats_df, use_container_width=True)

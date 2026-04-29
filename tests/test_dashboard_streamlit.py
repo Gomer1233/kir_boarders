@@ -7,6 +7,7 @@ from dashboard_streamlit import (
     RELATIONSHIP_COLUMNS,
     build_bin_table,
     calculate_relationship_stats,
+    filter_zero_metric_values,
     get_numeric_metric_columns,
     metric_summary,
     sort_metric_columns,
@@ -55,8 +56,21 @@ def test_metric_summary_contains_tz_statistics():
     assert summary["median"] == 10
     assert summary["p25"] == 5
     assert summary["p85"] == 17
+    assert summary["zero_count"] == 1
     assert summary["zero_share"] == 1 / 3
     assert summary["missing_share"] == 1 / 4
+
+
+def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
+    df = pd.DataFrame({"metric": [0, "0", 1, None, "bad"], "label": ["a", "b", "c", "d", "e"]})
+    numeric_metric = pd.to_numeric(df["metric"], errors="coerce")
+
+    filtered_df, filtered_metric = filter_zero_metric_values(df, numeric_metric)
+
+    assert filtered_df["label"].tolist() == ["c", "d", "e"]
+    assert filtered_metric.tolist()[:1] == [1.0]
+    assert pd.isna(filtered_metric.iloc[1])
+    assert pd.isna(filtered_metric.iloc[2])
 
 
 def test_build_bin_table_counts_rows_per_interval():
