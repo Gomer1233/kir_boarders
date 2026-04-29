@@ -104,3 +104,26 @@ def test_run_file_paths_returns_final_and_raw_paths(tmp_path):
         "final": tmp_path / "run_1_route_1" / "final_clean_data.xlsx",
         "raw": tmp_path / "run_1_route_1" / "merged_raw.xlsx",
     }
+
+
+from dashboard_streamlit import DASHBOARD_SCREENS, sample_for_plot
+
+
+def test_dashboard_screens_match_tz_sections():
+    assert DASHBOARD_SCREENS == [
+        "Overview",
+        "Metric analysis",
+        "Group comparison",
+        "Poteri relationships",
+        "Problem rows",
+        "Data",
+    ]
+
+
+def test_sample_for_plot_limits_large_dataframes():
+    df = pd.DataFrame({"value": range(100)})
+
+    sampled = sample_for_plot(df, max_rows=10)
+
+    assert len(sampled) == 10
+    assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]

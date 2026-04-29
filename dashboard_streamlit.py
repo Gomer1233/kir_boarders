@@ -22,6 +22,14 @@ FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_s
 GROUP_COLUMNS = [TS_COL, CATEGORY_COL, FACTORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
 PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
+DASHBOARD_SCREENS = [
+    "Overview",
+    "Metric analysis",
+    "Group comparison",
+    "Poteri relationships",
+    "Problem rows",
+    "Data",
+]
 
 
 def _require_streamlit():
@@ -54,6 +62,21 @@ def run_file_paths(run_dir):
         "final": run_dir / "final_clean_data.xlsx",
         "raw": run_dir / "merged_raw.xlsx",
     }
+
+
+def _read_excel_cached(path, mtime_ns):
+    return pd.read_excel(path)
+
+
+if st is not None:
+    _read_excel_cached = st.cache_data(show_spinner="Loading final_clean_data.xlsx...")(_read_excel_cached)
+
+
+def sample_for_plot(df, max_rows=20000):
+    if len(df) <= max_rows:
+        return df
+    step = max(1, len(df) // max_rows)
+    return df.iloc[::step].head(max_rows)
 
 
 def format_week_label(value):
@@ -163,7 +186,7 @@ def _load_run_dataframe(run_dir):
     if not final_path.exists():
         st.error(f"Missing final file: {final_path}")
         return None
-    return pd.read_excel(final_path)
+    return _read_excel_cached(str(final_path), final_path.stat().st_mtime_ns)
 
 
 def _render_quality_cards(filtered, numeric_metric):
@@ -209,7 +232,7 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
 
     bins = st.slider("Number of bins", min_value=5, max_value=100, value=30, step=5)
     bin_table = build_bin_table(numeric_metric, bins=bins)
-    chart_data = filtered.assign(_metric=numeric_metric)
+    chart_data = sample_for_plot(filtered.assign(_metric=numeric_metric))
     try:
         import plotly.express as px
 
@@ -256,7 +279,7 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         st.warning("Plotly is not installed; relationship scatter plots are unavailable.")
         return
 
-    chart_df = filtered.assign(_metric=numeric_metric)
+    chart_df = sample_for_plot(filtered.assign(_metric=numeric_metric))
     for column in available:
         st.plotly_chart(
             px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=f"{metric} vs {column}"),
@@ -308,20 +331,18 @@ def main():
     filtered = _apply_sidebar_filters(df)
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
-    audit_tab, metric_tab, group_tab, relationships_tab, problems_tab, data_tab = st.tabs(
-        ["Overview", "Metric analysis", "Group comparison", "Poteri relationships", "Problem rows", "Data"]
-    )
-    with audit_tab:
+    screen = st.radio("Dashboard screen", DASHBOARD_SCREENS, horizontal=True)
+    if screen == "Overview":
         _render_audit_tab(run_dir, filtered, numeric_metric)
-    with metric_tab:
+    elif screen == "Metric analysis":
         _render_metric_analysis_tab(filtered, metric, numeric_metric)
-    with group_tab:
+    elif screen == "Group comparison":
         _render_group_comparison_tab(filtered, numeric_metric)
-    with relationships_tab:
+    elif screen == "Poteri relationships":
         _render_relationships_tab(filtered, metric, numeric_metric)
-    with problems_tab:
+    elif screen == "Problem rows":
         _render_problem_rows_tab(filtered)
-    with data_tab:
+    elif screen == "Data":
         st.subheader("Filtered data sample")
         st.dataframe(filtered.head(1000), use_container_width=True)
 
