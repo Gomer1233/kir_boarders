@@ -127,3 +127,56 @@ def test_sample_for_plot_limits_large_dataframes():
 
     assert len(sampled) == 10
     assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+
+
+from dashboard_streamlit import build_bin_table_by_width, percentile_store_counts, split_by_network
+
+
+def test_build_bin_table_by_width_uses_fixed_bin_width():
+    table = build_bin_table_by_width(pd.Series([0, 5, 10, 15, 20]), bin_width=10)
+
+    assert table["bin_start"].tolist() == [0, 10, 20]
+    assert table["bin_end"].tolist() == [10, 20, 30]
+    assert table["count"].tolist() == [2, 2, 1]
+
+
+def test_percentile_store_counts_counts_values_below_thresholds():
+    result = percentile_store_counts(pd.Series([0, 10, 20, 30]), custom_percentile=50)
+
+    assert result["p25"]["percentile"] == 25
+    assert result["p25"]["count"] == 1
+    assert result["p85"]["percentile"] == 85
+    assert result["p85"]["count"] == 3
+    assert result["custom"]["percentile"] == 50
+    assert result["custom"]["count"] == 2
+
+
+def test_split_by_network_returns_one_frame_per_ts():
+    df = pd.DataFrame({TS_COL: ["B", "A", "B"], "value": [1, 2, 3]})
+
+    groups = split_by_network(df)
+
+    assert [name for name, _ in groups] == ["A", "B"]
+    assert [len(group) for _, group in groups] == [1, 2]
+
+
+
+def test_build_bin_table_by_width_counts_unique_stores_when_store_series_is_provided():
+    table = build_bin_table_by_width(
+        pd.Series([0, 5, 5, 15]),
+        bin_width=10,
+        store_series=pd.Series(["A", "A", "B", "C"]),
+    )
+
+    assert table["count"].tolist() == [3, 1]
+    assert table["store_count"].tolist() == [2, 1]
+
+
+def test_percentile_store_counts_counts_unique_stores_when_store_series_is_provided():
+    result = percentile_store_counts(
+        pd.Series([0, 10, 20, 30]),
+        custom_percentile=50,
+        store_series=pd.Series(["A", "A", "B", "C"]),
+    )
+
+    assert result["custom"]["count"] == 1

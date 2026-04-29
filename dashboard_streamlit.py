@@ -138,6 +138,94 @@ def build_bin_table(series, bins=20):
     return table
 
 
+def build_bin_table_by_width(series, bin_width, store_series=None):
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return pd.DataFrame(columns=["bin_start", "bin_end", "bin", "count", "store_count", "share"])
+
+    bin_width = float(bin_width)
+    if bin_width <= 0:
+        raise ValueError("bin_width must be positive")
+
+    min_value = float(numeric.min())
+    max_value = float(numeric.max())
+    start = (min_value // bin_width) * bin_width
+    end = ((max_value // bin_width) + 1) * bin_width
+    edges = list(_frange(start, end + bin_width, bin_width))
+    source = pd.DataFrame({"metric": pd.to_numeric(series, errors="coerce")})
+    if store_series is not None:
+        source["store"] = store_series
+    source = source.dropna(subset=["metric"])
+    source["bin_interval"] = pd.cut(source["metric"], bins=edges, right=False, include_lowest=True)
+    counts = source["bin_interval"].value_counts(sort=False)
+
+    rows = []
+    total = int(counts.sum())
+    for interval, count in counts.items():
+        bin_rows = source[source["bin_interval"] == interval]
+        store_count = int(bin_rows["store"].nunique()) if "store" in bin_rows.columns else int(count)
+        rows.append(
+            {
+                "bin_start": _clean_number(interval.left),
+                "bin_end": _clean_number(interval.right),
+                "bin": f"{_clean_number(interval.left)} - {_clean_number(interval.right)}",
+                "count": int(count),
+                "store_count": store_count,
+                "share": float(count / total) if total else 0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def percentile_store_counts(series, custom_percentile, store_series=None):
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return {
+            "p25": {"percentile": 25, "threshold": None, "count": 0},
+            "p85": {"percentile": 85, "threshold": None, "count": 0},
+            "custom": {"percentile": custom_percentile, "threshold": None, "count": 0},
+        }
+
+    source = pd.DataFrame({"metric": pd.to_numeric(series, errors="coerce")})
+    if store_series is not None:
+        source["store"] = store_series
+    source = source.dropna(subset=["metric"])
+
+    def make_item(percentile):
+        threshold = float(source["metric"].quantile(percentile / 100))
+        below = source[source["metric"] <= threshold]
+        count = int(below["store"].nunique()) if "store" in below.columns else int(len(below))
+        return {
+            "percentile": percentile,
+            "threshold": threshold,
+            "count": count,
+        }
+
+    return {"p25": make_item(25), "p85": make_item(85), "custom": make_item(custom_percentile)}
+
+
+def split_by_network(df):
+    if TS_COL not in df.columns:
+        return [("All", df)]
+    return [(str(name), group.copy()) for name, group in sorted(df.groupby(TS_COL, dropna=False), key=lambda item: str(item[0]))]
+
+
+def _frange(start, stop, step):
+    values = []
+    value = start
+    while value < stop:
+        values.append(value)
+        value += step
+    return values
+
+
+def _clean_number(value):
+    value = float(value)
+    if value.is_integer():
+        return int(value)
+    return round(value, 6)
+
+
 def calculate_relationship_stats(df, metric, relationship_columns):
     rows = []
     metric_values = pd.to_numeric(df[metric], errors="coerce")
@@ -230,17 +318,53 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     stats_df = pd.DataFrame([summary])
     st.dataframe(stats_df, use_container_width=True)
 
-    bins = st.slider("Number of bins", min_value=5, max_value=100, value=30, step=5)
-    bin_table = build_bin_table(numeric_metric, bins=bins)
+    valid_metric = numeric_metric.dropna()
+    default_width = 1.0
+    if not valid_metric.empty:
+        span = float(valid_metric.max() - valid_metric.min())
+        default_width = max(span / 30, 1.0)
+    bin_width = st.number_input("Bin width", min_value=0.000001, value=float(default_width), step=float(default_width))
+    custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, value=50)
+    store_series = filtered[FACTORY_COL] if FACTORY_COL in filtered.columns else None
+    bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
+    percentile_counts = percentile_store_counts(numeric_metric, custom_percentile=custom_percentile, store_series=store_series)
     chart_data = sample_for_plot(filtered.assign(_metric=numeric_metric))
+
+    pc1, pc2, pc3 = st.columns(3)
+    pc1.metric(
+        "Stores <= P25",
+        percentile_counts["p25"]["count"],
+        _format_number(percentile_counts["p25"]["threshold"]),
+    )
+    pc2.metric(
+        "Stores <= P85",
+        percentile_counts["p85"]["count"],
+        _format_number(percentile_counts["p85"]["threshold"]),
+    )
+    pc3.metric(
+        f"Stores <= P{custom_percentile}",
+        percentile_counts["custom"]["count"],
+        _format_number(percentile_counts["custom"]["threshold"]),
+    )
+
     try:
         import plotly.express as px
 
-        st.plotly_chart(px.histogram(chart_data, x="_metric", nbins=bins, title=f"Bin distribution: {metric}"), use_container_width=True)
+        fig = px.bar(
+            bin_table,
+            x="bin_start",
+            y="store_count" if "store_count" in bin_table.columns else "count",
+            hover_data=["bin", "share"],
+            title=f"Fixed-width bin distribution: {metric}",
+        )
+        fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
+        fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
+        fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
+        st.plotly_chart(fig, use_container_width=True)
         st.plotly_chart(px.box(chart_data, y="_metric", points=False, title=f"Boxplot: {metric}"), use_container_width=True)
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; showing a basic Streamlit chart.")
-        st.bar_chart(bin_table.set_index("bin")["count"])
+        st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)
     st.subheader("Bin table")
     st.dataframe(bin_table, use_container_width=True)
 
@@ -270,21 +394,23 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         st.info("No poteri numeric columns found for relationship analysis.")
         return
 
-    stats = calculate_relationship_stats(filtered.assign(_metric=numeric_metric), metric, available)
-    st.dataframe(stats, use_container_width=True)
-
     try:
         import plotly.express as px
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; relationship scatter plots are unavailable.")
         return
 
-    chart_df = sample_for_plot(filtered.assign(_metric=numeric_metric))
-    for column in available:
-        st.plotly_chart(
-            px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=f"{metric} vs {column}"),
-            use_container_width=True,
-        )
+    for network_name, network_df in split_by_network(filtered.assign(_metric=numeric_metric)):
+        st.markdown(f"### {network_name}")
+        stats = calculate_relationship_stats(network_df, metric, available)
+        st.dataframe(stats, use_container_width=True)
+
+        chart_df = sample_for_plot(network_df)
+        for column in available:
+            st.plotly_chart(
+                px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=f"{network_name}: {metric} vs {column}"),
+                use_container_width=True,
+            )
 
 
 def _render_problem_rows_tab(filtered):
