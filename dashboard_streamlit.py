@@ -179,6 +179,16 @@ def collapse_tail_bins(bin_table, head_bins):
     return pd.concat([head, pd.DataFrame([tail_row])], ignore_index=True)
 
 
+def prepare_bin_chart_table(bin_table):
+    chart_table = bin_table.copy()
+    if chart_table.empty:
+        return chart_table
+
+    chart_table["bin_mid"] = (pd.to_numeric(chart_table["bin_start"]) + pd.to_numeric(chart_table["bin_end"])) / 2
+    chart_table["bar_width"] = pd.to_numeric(chart_table["bin_end"]) - pd.to_numeric(chart_table["bin_start"])
+    return chart_table
+
+
 def build_bin_table(series, bins=20):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -491,15 +501,22 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
         import plotly.express as px
 
         bar_value_column = metric_bar_value_column(bin_table)
+        chart_bin_table = prepare_bin_chart_table(chart_bin_table)
         fig = px.bar(
             chart_bin_table,
-            x="bin_start",
+            x="bin_mid",
             y=bar_value_column,
             text=bar_value_column,
-            hover_data=["bin", "share"],
+            hover_data=["bin", "bin_start", "bin_end", "share"],
             title=f"Fixed-width bin distribution: {metric}",
         )
-        fig.update_traces(texttemplate="%{text:,}", textposition="outside", cliponaxis=False)
+        fig.update_traces(
+            width=chart_bin_table["bar_width"],
+            texttemplate="%{text:,}",
+            textposition="outside",
+            cliponaxis=False,
+        )
+        fig.update_xaxes(title_text="metric value")
         fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
         fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
         fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")

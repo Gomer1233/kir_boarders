@@ -11,6 +11,7 @@ from dashboard_streamlit import (
     filter_zero_metric_values,
     format_percentile_card,
     get_numeric_metric_columns,
+    prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
     sort_metric_columns,
@@ -114,6 +115,22 @@ def test_collapse_tail_bins_returns_copy_when_head_covers_all_bins():
 
     assert collapsed.equals(table)
     assert collapsed is not table
+
+
+def test_prepare_bin_chart_table_uses_bin_midpoints_and_widths_for_geometry():
+    table = pd.DataFrame(
+        {
+            "bin_start": [0, 3469.068],
+            "bin_end": [3469.068, 5203.602],
+            "bin": ["0 - 3469.068", "3469.068 - 5203.602"],
+            "count": [100, 10],
+        }
+    )
+
+    chart_table = prepare_bin_chart_table(table)
+
+    assert chart_table["bin_mid"].round(3).tolist() == [1734.534, 4336.335]
+    assert chart_table["bar_width"].round(3).tolist() == [3469.068, 1734.534]
 
 
 def test_build_bin_table_counts_rows_per_interval():
