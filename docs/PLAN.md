@@ -1,189 +1,67 @@
-# 🧭 **План доработки проекта "KIR-Анализатор"**
+﻿# Current Implementation Plan
 
----
+## Goal
 
-## 🎯 **Цель**
-Превратить инструмент в **универсальный pipeline для любого КИР-ХХХ**, с поддержкой:
-- 3 режимов работы: **route_1**, **route_2**, **both** (оптимизированный запуск)
-- 3 вкладок дашборда (распределения, корреляции, сравнение категорий)
-- Полной настройки через `project_config.yaml` без хардкода
+Implement a loss-safe KIR data pipeline where raw merge output is always available for audit and the main analytical output keeps rows with explicit flags instead of silently deleting data.
 
----
+## Implemented Architecture
 
-## ✅ **Выполнено**
-### **Этап 1. Конфигурация и структура**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 1.1 | Обновить `project_config.yaml` под новые требования | `project_config.yaml` | ✅ Выполнено |
-| 1.2 | Убрать жестко заданные названия КИР-066 | `scripts/db.py`, `merge_data.py`, `merge_data_v2.py`, `cleaner.py`, `cleaner_v2.py` | ✅ Выполнено |
-| 1.3 | Добавить `docs/` и путь к некатегорийному файлу | `project_config.yaml` | ✅ Выполнено |
-| 1.4 | Вынести все group_cols в конфиг (двух видов) | `project_config.yaml` | ✅ Выполнено |
-| 1.5 | Добавить настройку выбора целевого столбца | `project_config.yaml` | ✅ Выполнено |
-| 1.6 | Добавить флаг `remove_zeros` и `remove_empty` | `project_config.yaml` | ✅ Выполнено |
-| 1.7 | Обновить структуру путей под `route_1/`, `route_2/` | `project_config.yaml` | ✅ Выполнено |
-| 1.8 | Добавить режимы `route_1`, `route_2`, `both` | `project_config.yaml` | ✅ Выполнено |
+- Primary CLI: `python main.py route_1|route_2|both`.
+- Compatibility CLI: `python main_final_v3.py route_1|route_2|both`.
+- Dashboard CLI: `streamlit run dashboard_streamlit.py`.
+- Legacy broken entrypoints are archived under `archive/legacy_entrypoints/`.
 
----
+## Route Rules
 
-### **Этап 2. Модуль объединения данных**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 2.1 | Добавить универсальную функцию `normalize_week()` | `scripts/merge_data_v2.py` | ✅ Выполнено |
-| 2.2 | Убрать хардкод названий столбцов — использовать `columns.*` из конфига | `scripts/merge_data_v2.py` | ✅ Выполнено |
-| 2.3 | Добавить проверку типов и приведение к common types | `scripts/merge_data_v2.py` | ✅ Выполнено |
-| 2.4 | Добавить логирование этапа очистки NaN/нулей | `scripts/merge_data_v2.py` | ✅ Выполнено |
-| 2.5 | Убрать блок "НАСТРОЙКИ" из `__main__` — использовать конфиг | `scripts/merge_data.py`, `scripts/merge_data_v2.py` | ✅ Выполнено |
+| Route | KIR input | Poteri input | Merge key |
+| --- | --- | --- | --- |
+| `route_1` | `data/route_1/kir_with_cats.xlsx` | `data/route_1/poteri_with_cats.xlsx` | week + TS + category + factory |
+| `route_2` | `data/route_2/kir_without_cats.xlsx` | `data/route_2/poteri_without_cats.xlsx` | week + TS + factory |
 
----
+## Output Contract
 
-### **Этап 3. Модуль очистки**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 3.1 | Расширить `split_outliers_multi()` для поддержки `grouping.without_cats` | `scripts/cleaner_v2.py` | ✅ Выполнено |
-| 3.2 | Добавить отдельную функцию `pre_clean()` для удаления мусора (нули, пустые) | `scripts/cleaner_v2.py` | ✅ Выполнено |
-| 3.3 | Вынести логику `remove_zeros`, `remove_empty` в конфиг + поддержку в `pre_clean()` | `scripts/cleaner_v2.py` | ✅ Выполнено |
-| 3.4 | Обновить `main.py` для передачи `group_cols` из конфига | `main_final_v3.py` | ✅ Выполнено |
+Every run folder must contain:
 
----
+- `merged_raw.xlsx`: raw audit merge.
+- `final_clean_data.xlsx`: main analytical file with quality flags.
+- `excluded_rows.xlsx`: structurally unrepresentable rows only.
+- `merge_diagnostics.md`: counts and merge diagnostics.
 
-### **Этап 4. Оркестратор (pipeline)**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 4.1 | Создать `main_final_v3.py` на основе `main_final_v2.py` | `main_final_v3.py` | ✅ Выполнено |
-| 4.2 | Добавить логику выбора `svod_file` по `config['mode']` | `main_final_v3.py` | ✅ Выполнено |
-| 4.3 | Передавать `group_cols` и `target_col` в `merge` и `cleaner` | `main_final_v3.py` | ✅ Выполнено |
-| 4.4 | Добавить поддержку запуска дашборда с аргументами из конфига | `main_final_v3.py` | ✅ Выполнено |
-| 4.5 | Добавить режимы `route_1`, `route_2`, `both` с автоматическим выбором путей | `main_final_v3.py` | ✅ Выполнено |
+Required invariant:
 
----
-
-### **Этап 5. Дашборд (визуализация)**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 5.1 | Добавить комбобокс выбора целевого столбца (из входных данных) | `scripts/db.py` | ⚠️ В процессе |
-| 5.2 | Реализовать **вкладку 3: "Сравнение категорий"** | `scripts/db.py` | ✅ Выполнено |
-| 5.3 | Добавить переключатель режимов (категории / без категорий) | `scripts/db.py` | ⚠️ В процессе |
-| 5.4 | Поддержать динамическую группировку в `update_corr_plot` и `update_stats_plot` | `scripts/db.py` | ⚠️ В процессе |
-| 5.5 | Добавить сохранение текущих настроек (перцентиль, шаг бина) между запусками | `scripts/db.py` | ⚠️ В процессе |
-
----
-
-## 🔍 **Дополнительные шаги**
-
-### **Этап 6. Документация**
-| № | Задача | Файл | Статус |
-|---|--------|------|--------|
-| 6.1 | Создать `docs/example_config.yaml` с полным примером | `docs/example_config.yaml` | ❌ Удален (устарел) |
-| 6.2 | Создать `docs/mode_without_cats_example.xlsx` | `docs/` | ⚠️ Не требуется (файл должен быть вручную создан пользователем) |
-| 6.3 | Написать `docs/README.md` с инструкциями | `docs/README.md` | ✅ Выполнено |
-| 6.4 | Создать `docs/PLAN.md` с планом доработок | `docs/PLAN.md` | ✅ Выполнено |
-
----
-
-## 📋 **Финальная проверка**
-
-| Критерий | Проверка | Срок |
-|----------|----------|------|
-| ✅ Универсальность по КИР-ХХХ | Можно задать любой столбец в `columns.target_col` | Этап 1 |
-| ✅ Режимы работы | `route_1`, `route_2`, `both` | Этап 4 |
-| ⚠️ 3 вкладки дашборда | Распределения, корреляции, сравнение категорий | Этап 5 |
-| ✅ Нет хардкода | Все параметры — из конфига | Этапы 1, 2, 3 |
-| ✅ Автоматизация | `python main_final_v3.py [route_1|route_2|both]` → дашборд | Этап 4 |
-
----
-
-## 📅 **План действий на следующие шаги**
-
-### **Шаг 1: Обновить `scripts/db.py` (дашборд)**
-
-| № | Задача | Приоритет | Описание |
-|---|--------|-----------|----------|
-| 5.1 | Добавить комбобокс выбора целевого столбца | 🟠 Высокий | В UI добавить `target_col_selector`, который загружает список доступных числовых столбцов из данных |
-| 5.2 | Реализовать вкладку 3: "Сравнение категорий" | 🔴 Критично | Новая вкладка с группировкой по `Категория`, статистикой (mean, median, min, max, p85, count) |
-| 5.3 | Добавить переключатель режимов | 🔴 Критично | Чекбокс/радиокнопка `with_categories` / `without_categories`, перезагружает дашборд |
-| 5.4 | Динамическая группировка | 🟠 Высокий | `update_corr_plot`, `update_stats_plot` должны использовать `group_cols` из конфига |
-| 5.5 | Сохранение настроек | 🟡 Средний | Сохранять `bin_size`, `percentile` в `project_config.yaml` или отдельный `ui_settings.json` |
----
-
-### **Шаг 2: Тестирование и отладка**
-
-| № | Задача | Приоритет |
-|---|--------|-----------|
-| 7.1 | Протестировать режим `without_categories` | 🟠 Высокий |
-| 7.2 | Проверить нормализацию недели на всех типах данных | 🟠 Высокий |
-| 7.3 | Проверить логирование на каждом этапе | 🟡 Средний |
----
-
-### **Шаг 3: Документация**
-
-| № | Задача | Приоритет |
-|---|--------|-----------|
-| 8.1 | Обновить `docs/README.md` под новые возможности | 🟠 Высокий |
-| 8.2 | Создать пример файла без категорий (`docs/kir_66_MD_no_cats.xlsx`) | 🟡 Средний |
-| 8.3 | Добавить `docs/TROUBLESHOOTING.md` с типичными ошибками | 🟡 Средний |
-
----
-
-## 🚀 **Рекомендуемый порядок реализации (поэтапно)**
-
-### **Фаза 1: UI Дашборда (2 дня)**
-1. **День 1**: 5.1 + 5.3 (комбобокс + переключатель режимов)
-2. **День 2**: 5.2 (вкладка 3: сравнение категорий)
-
-### **Фаза 2: Логика группировки (1 день)**
-3. **День 3**: 5.4 (динамическая группировка + тесты)
-
-### **Фаза 3: Финал (1 день)**
-4. **День 4**: 5.5 (сохранение настроек) + 7.1–7.3 (тесты) + 8.1–8.3 (документация)
-
----
-
-## 📊 **Выполнено**
-
-| Этап | Задачи | Выполнено |
-|------|--------|-----------|
-| 1 | Конфигурация | 7/7 ✅ |
-| 2 | Merge | 4/4 ✅ |
-| 3 | Cleaner | 4/4 ✅ |
-| 4 | Оркестратор | 5/5 ✅ |
-| 7 | Архитектура | 2/2 ✅ |
-| 5 | Дашборд | 1/5 ✅ |
-| 6 | Документация | 3/4 ✅ |
-
-**Итого**: 28/33 (85%)
-
----
-
-## 🔄 **Исправление архитектуры (13.02.2025)**
-
-После анализа ТЗ выявлено: **Должно быть 4 файла (по 2 на маршрут), а не 3**
-
-### ✅ **Текущая структура (Финальная)**
-| Маршрут | Папка | Файлы |
-|---------|-------|-------|
-| 1 (с категориями) | `data/route_1/` | `kir_with_cats.xlsx`, `poteri_with_cats.xlsx` |
-| 2 (без категорий) | `data/route_2/` | `kir_without_cats.xlsx`, `poteri_without_cats.xlsx` |
-
-### 🎯 **3 режима запуска**
-| Режим | Описание | Запуск |
-|-------|----------|--------|
-| `route_1` | Только Маршрут 1 | `python main_final_v3.py route_1` |
-| `route_2` | Только Маршрут 2 | `python main_final_v3.py route_2` |
-| `both` | Оба маршрута одновременно | `python main_final_v3.py both` |
-
-### 📄 **Обновленный `project_config.yaml`**
-
-```yaml
-# Пути к подпапкам
-inputs:
-  route_1: "data/route_1"
-  route_2: "data/route_2"
-
-# Режим работы: route_1 | route_2 | both
-mode: "route_1"
+```text
+final_row_count + excluded_row_count == raw_row_count
 ```
 
----
+## Data Safety Rules
 
-## 📝 **Пример конфигурации (после доработки)**
+- Do not drop rows because of zero metric values.
+- Do not drop rows because poteri is missing.
+- Keep missing-key KIR rows with `has_missing_key=true` when representable.
+- Prevent pandas null-key matching by excluding missing-key rows from the matching part of merge.
+- Mark duplicate KIR and poteri keys with flags after merge expansion.
+- Keep outlier handling out of automatic pipeline deletion.
+- Keep `target_col` out of the pipeline; metric selection belongs to the dashboard.
 
+## Verification Checklist
+
+Run before considering the implementation complete:
+
+```powershell
+python -m pytest -q
+python -m py_compile main.py main_final_v3.py dashboard_streamlit.py scripts\merge_data_v3.py scripts\quality_flags.py scripts\pipeline.py
+python main.py route_1
+python main.py route_2
+```
+
+Then verify latest route runs satisfy:
+
+```text
+raw_row_count == final_row_count + excluded_row_count
+```
+
+## Remaining Product Decisions
+
+- Whether to add an explicit manual outlier review/export workflow.
+- Whether to persist dashboard UI settings between sessions.
+- Whether to add a richer dashboard tab for correlations after the base audit workflow is stable.

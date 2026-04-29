@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated run artifacts
+data/run_*/
+logs/processing_log_*.md
+logs/*.log
+
+# Temporary Excel files
+~$*.xlsx
+*.tmp.xlsx
+
+# Local Streamlit state
+.streamlit/secrets.toml
+streamlit_dashboard.*.log
+streamlit_dashboard.pid

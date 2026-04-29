@@ -1,84 +1,81 @@
-# 📚 Документация KIR-Анализатор
+﻿# KIR Data Pipeline
 
-## 🎯 Назначение
+## Purpose
 
-KIR-Анализатор — универсальный инструмент для обработки и визуализации данных по KIR-ХХХ (коэффициент перепрогноза регулярного спроса) в розничной сети.
+This project joins KIR source data with poteri data and produces auditable analytical outputs.
+The main rule is simple: rows must not disappear silently during merge, transformation, or quality checks.
 
-## 🚀 Быстрый старт
+## Inputs
 
-### 1. Подготовка
+Route input folders are configured in `project_config.yaml`:
 
-1. Поместите исходные файлы:
-   - `data/kir_66_MD_1.xlsx` — сводный отчет (с КИР-ХХХ)
-   - `data/poteri_03_04.xlsx` — отчет потерь (списания, выручка, ТЗ)
-   - (опционально) `docs/kir_66_MD_no_cats.xlsx` — файл без категорий
+- `data/route_1/` uses merge key: week + TS + category + factory.
+- `data/route_2/` uses merge key: week + TS + factory.
 
-2. Отредактируйте `project_config.yaml` под свои нужды
+Each route expects one KIR file and one poteri file in its folder.
 
-### 2. Запуск pipeline
+## Install
 
-```bash
-python main_final_v3.py
+```powershell
+pip install -r requirements.txt
 ```
 
-Скрипт автоматически:
-- Объединит данные из 2 файлов
-- Очистит от выбросов
-- Сохранит результат в `data/run_N/`
-- Запустит дашборд
+## Run Pipeline
 
-### 3. Работа с дашбордом
+```powershell
+python main.py route_1
+python main.py route_2
+python main.py both
+```
 
-- **Фильтры**: выберите неделю и категорию
-- **Вкладки**:
-  - 📊 Распределения — гистограмма КИР по магазинам (2 ТС)
-  - 📈 Корреляции — scatterplots с выбросами
-  - 📊 Сравнение — статистика по категориям
-- **Слайдеры**: настройте шаг бина и перцентиль
+`main_final_v3.py` is kept as a compatibility entrypoint, but `main.py` is the primary command.
 
-## ⚙️ Настройки
+## Outputs
 
-Все параметры вынесены в `project_config.yaml`:
+Each route creates a new `data/run_N_route_X/` folder with these files:
 
-- `mode`: режим работы (`with_categories` / `without_cats`)
-- `inputs`: пути к файлам
-- `columns`: названия столбцов
-- `cleaning`: параметры очистки
-- `grouping`: группы для агрегации
-- `visualization`: настройки дашборда
+| File | Purpose |
+| --- | --- |
+| `merged_raw.xlsx` | Raw audit merge, before quality filtering or optimization. |
+| `final_clean_data.xlsx` | Main analytical file. Rows are preserved and quality issues are represented as flags. |
+| `excluded_rows.xlsx` | Structurally unrepresentable rows only. Normally empty. |
+| `merge_diagnostics.md` | Merge counts, duplicate-key diagnostics, and audit invariant result. |
 
-## 📊 Структура данных
+Required audit invariant:
 
-### Исходный файл 1 (свод)
-| Колонка | Описание |
-|---------|----------|
-| НеделяГод | Неделя (формат: 202603) |
-| ТС | Торговая сеть (Пятерочка/Перекресток) |
-| Завод | Магазин |
-| Категория | Группа товаров |
-| КИР-ХХХ | Целевой показатель |
+```text
+final_row_count + excluded_row_count == raw_row_count
+```
 
-### Исходный файл 2 (потери)
-| Колонка | Описание |
-|---------|----------|
-| Неделя | Неделя (формат: 2026/03) |
-| Торговая сеть | ТС |
-| Завод | Магазин |
-| Категория | Группа товаров |
-| Списания | Списано |
-| Выручка | Выручка |
-| Свободный ТЗ | Товарный запас |
+## Data Policy
 
-## 🔧 Режимы работы
+- Missing poteri matches stay in `final_clean_data.xlsx` with `has_poteri_match=false`.
+- Missing merge keys stay in `final_clean_data.xlsx` with `has_missing_key=true` when they can be represented.
+- Missing-key KIR rows must not match missing-key poteri rows.
+- Zero KIR values are valid and must not be removed.
+- Empty KIR metric values are not removed by the pipeline; analysts choose metrics in the dashboard.
+- Outliers are not deleted automatically. They should be reviewed in the dashboard or handled by an explicit manual mode.
 
-### С категориями
-Группировка: `НеделяГод + ТС + Категория`
+## Dashboard
 
-### Без категорий
-Группировка: `НеделяГод + ТС + Завод`
+Run:
 
-Для второго режима используйте файл `docs/kir_66_MD_no_cats.xlsx`
+```powershell
+streamlit run dashboard_streamlit.py
+```
 
-## 📝 Примеры
+The dashboard reads `final_clean_data.xlsx`, lets the analyst select the metric column, and shows:
 
-Смотрите `docs/example_config.yaml` для готового шаблона конфига.
+- run selector;
+- metric selector;
+- filters by route dimensions and quality flags;
+- row counts and data-quality cards;
+- distribution charts;
+- grouped statistics;
+- problem rows with missing matches, missing keys, or duplicate keys.
+
+## Configuration Notes
+
+`target_col` is intentionally not part of the pipeline configuration. The dashboard chooses the analytical metric dynamically from numeric columns in `final_clean_data.xlsx`.
+
+Legacy entrypoints were moved to `archive/legacy_entrypoints/` to reduce the risk of running stale scripts.
