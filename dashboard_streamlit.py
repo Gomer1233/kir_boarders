@@ -1,12 +1,13 @@
 from pathlib import Path
 from html import escape
+import json
 import re
 
 import pandas as pd
 
 from main_final_v3 import load_config
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
-from scripts.upload_runner import run_project_routes, save_uploaded_route_files
+from scripts.upload_runner import UPLOAD_MANIFEST_NAME, run_project_routes, save_uploaded_route_files
 
 try:
     import streamlit as st
@@ -16,6 +17,7 @@ except ModuleNotFoundError:
 
 DATA_DIR = Path("data")
 DATA_PROJECTS_DIR = DATA_DIR / "projects"
+EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 WEEK_COL = "\u041d\u0435\u0434\u0435\u043b\u044f\u0413\u043e\u0434"
 TS_COL = "\u0422\u0421"
 CATEGORY_COL = "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"
@@ -73,6 +75,20 @@ def list_project_run_dirs(project_name, projects_dir=DATA_PROJECTS_DIR):
     )
 
 
+def latest_project_run_name(project_name, projects_dir=DATA_PROJECTS_DIR):
+    runs = list_project_run_dirs(project_name, projects_dir=projects_dir)
+    if not runs:
+        return None
+    return runs[0].name
+
+
+def load_upload_manifest(project_name, route_name, projects_dir=DATA_PROJECTS_DIR):
+    manifest_path = Path(projects_dir) / str(project_name) / "uploads" / route_name / UPLOAD_MANIFEST_NAME
+    if not manifest_path.exists():
+        return None
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
 def list_run_dirs():
     return list_legacy_run_dirs(DATA_DIR)
 
@@ -113,6 +129,21 @@ def run_file_paths(run_dir):
         "final": run_dir / "final_clean_data.xlsx",
         "raw": run_dir / "merged_raw.xlsx",
     }
+
+
+def download_file_name(path, run_dir):
+    return f"{Path(run_dir).name}_{Path(path).name}"
+
+
+def read_file_for_download(path, mtime_ns):
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Download file not found: {path}")
+    return path.read_bytes()
+
+
+if st is not None:
+    read_file_for_download = st.cache_data(show_spinner=False)(read_file_for_download)
 
 
 def _read_excel_cached(path, mtime_ns):
@@ -521,8 +552,18 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
     _render_quality_cards(filtered, numeric_metric)
     paths = run_file_paths(run_dir)
     with st.expander("Opened files", expanded=False):
-        st.write(f"Final: `{paths['final']}`")
-        st.write(f"Raw: `{paths['raw']}`")
+        for label, path in [("Final", paths["final"]), ("Raw", paths["raw"])]:
+            st.write(f"{label}: `{path}`")
+            exists = path.exists()
+            data = read_file_for_download(path, path.stat().st_mtime_ns) if exists else b""
+            st.download_button(
+                f"Download {path.name}",
+                data=data,
+                file_name=download_file_name(path, run_dir),
+                mime=EXCEL_MIME,
+                disabled=not exists,
+                key=f"download_{label}_{Path(run_dir).name}",
+            )
 
     diagnostics_path = run_dir / "merge_diagnostics.md"
     if diagnostics_path.exists():
@@ -773,9 +814,20 @@ def main():
     if current_projects:
         with st.sidebar.expander("Upload source files", expanded=False):
             upload_project = st.selectbox("Upload project", current_projects, key="upload_project")
+            latest_run = latest_project_run_name(upload_project)
+            if latest_run:
+                st.caption(f"Latest run: {latest_run}")
             route_mode = st.selectbox("Upload route mode", ["route_1", "route_2", "both"], key="upload_route_mode")
             for route_name in routes_for_ui_mode(route_mode):
                 st.markdown(f"**{route_name}**")
+                manifest = load_upload_manifest(upload_project, route_name)
+                if manifest:
+                    st.caption(
+                        "Last upload: "
+                        f"KIR `{manifest.get('kir_original_name', 'n/a')}`, "
+                        f"Poteri `{manifest.get('poteri_original_name', 'n/a')}`, "
+                        f"{manifest.get('saved_at', 'n/a')}"
+                    )
                 kir_file = st.file_uploader(
                     f"KIR file for {route_name}",
                     type=["xlsx", "xls"],

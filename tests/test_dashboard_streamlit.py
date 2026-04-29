@@ -4,6 +4,7 @@ import pandas as pd
 
 from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
+    download_file_name,
     FACTORY_COL,
     FILTER_COLUMNS,
     format_run_result,
@@ -18,6 +19,8 @@ from dashboard_streamlit import (
     get_numeric_metric_columns,
     list_legacy_run_dirs,
     list_project_run_dirs,
+    latest_project_run_name,
+    load_upload_manifest,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -26,6 +29,7 @@ from dashboard_streamlit import (
     routes_for_ui_mode,
     sort_metric_columns,
     project_select_options,
+    read_file_for_download,
 )
 
 TS_COL = "\u0422\u0421"
@@ -289,6 +293,57 @@ def test_format_run_result_includes_route_run_and_output_paths(tmp_path):
     assert "run_001_route_1" in text
     assert "final_clean_data.xlsx" in text
     assert "merged_raw.xlsx" in text
+
+
+def test_download_file_name_includes_run_context():
+    run_dir = Path("data") / "run_015_route_1"
+    path = run_dir / "final_clean_data.xlsx"
+
+    assert download_file_name(path, run_dir) == "run_015_route_1_final_clean_data.xlsx"
+
+
+def test_read_file_for_download_reads_exact_bytes(tmp_path):
+    path = tmp_path / "merged_raw.xlsx"
+    path.write_bytes(b"excel-bytes")
+
+    assert read_file_for_download(path, path.stat().st_mtime_ns) == b"excel-bytes"
+
+
+def test_read_file_for_download_raises_clear_error_for_missing_file(tmp_path):
+    missing = tmp_path / "missing.xlsx"
+
+    try:
+        read_file_for_download(missing, 0)
+    except FileNotFoundError as exc:
+        assert "Download file not found" in str(exc)
+    else:
+        raise AssertionError("Expected FileNotFoundError")
+
+
+def test_load_upload_manifest_returns_none_when_missing(tmp_path):
+    assert load_upload_manifest("003", "route_1", projects_dir=tmp_path) is None
+
+
+def test_load_upload_manifest_reads_saved_upload_metadata(tmp_path):
+    manifest_dir = tmp_path / "003" / "uploads" / "route_1"
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "upload_manifest.json").write_text(
+        '{"kir_original_name": "kir.xlsx", "poteri_original_name": "poteri.xlsx", "saved_at": "2026-04-29T00:00:00Z"}',
+        encoding="utf-8",
+    )
+
+    manifest = load_upload_manifest("003", "route_1", projects_dir=tmp_path)
+
+    assert manifest["kir_original_name"] == "kir.xlsx"
+    assert manifest["poteri_original_name"] == "poteri.xlsx"
+
+
+def test_latest_project_run_name_returns_newest_run(tmp_path):
+    runs_dir = tmp_path / "003" / "runs"
+    (runs_dir / "run_001_route_1").mkdir(parents=True)
+    (runs_dir / "run_002_route_2").mkdir()
+
+    assert latest_project_run_name("003", projects_dir=tmp_path) == "run_002_route_2"
 
 
 from dashboard_streamlit import read_final_data_with_progress
