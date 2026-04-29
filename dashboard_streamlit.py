@@ -344,6 +344,10 @@ def filter_visual_outliers(df, x_col, y_col, quantile=0.99):
     source = df.copy()
     x_values = pd.to_numeric(source[x_col], errors="coerce")
     y_values = pd.to_numeric(source[y_col], errors="coerce")
+    positive_mask = x_values.gt(0) & y_values.gt(0)
+    source = source[positive_mask].copy()
+    x_values = x_values[positive_mask]
+    y_values = y_values[positive_mask]
     pair = pd.DataFrame({"x": x_values, "y": y_values}).dropna()
     if pair.empty:
         return source.iloc[0:0].copy()
@@ -597,7 +601,11 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         st.info("No poteri numeric columns found for relationship analysis.")
         return
 
-    hide_outliers = st.checkbox("Hide visual outliers", value=False)
+    hide_outliers = st.checkbox(
+        "Hide visual outliers, zeros and negatives",
+        value=False,
+        help="Only affects relationship charts. Keeps points where selected KIR metric and comparison metric are > 0, then applies percentile cutoff.",
+    )
     outlier_percentile = st.slider(
         "Visible percentile cutoff",
         min_value=90,
@@ -645,7 +653,7 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 if hide_outliers:
-                    st.caption(f"Visual cutoff: P{outlier_percentile}; shown {len(chart_df):,} points.")
+                    st.caption(f"Visual filter: x/y > 0 and P{outlier_percentile} cutoff; shown {len(chart_df):,} points.")
 
 
 def _render_problem_rows_tab(filtered):

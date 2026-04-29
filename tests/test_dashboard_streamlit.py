@@ -313,6 +313,15 @@ def test_filter_visual_outliers_trims_extreme_x_and_y_values_without_mutating_so
     assert df["_metric"].tolist() == [1, 2, 3, 1000]
 
 
+def test_filter_visual_outliers_removes_zero_and_negative_x_or_y_values():
+    df = pd.DataFrame({"_metric": [-1, 0, 1, 2], WRITEOFFS: [10, 10, 0, 20]})
+
+    filtered = filter_visual_outliers(df, "_metric", WRITEOFFS, quantile=1.0)
+
+    assert filtered["_metric"].tolist() == [2]
+    assert filtered[WRITEOFFS].tolist() == [20]
+
+
 def test_relationship_chart_rows_group_networks_side_by_side_per_comparison_metric():
     rows = relationship_chart_rows(["TC Perekrestok", "TC Pyaterochka"], [WRITEOFFS, REVENUE])
 
