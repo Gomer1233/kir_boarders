@@ -15,3 +15,6 @@ logs/*.log
 .streamlit/secrets.toml
 streamlit_dashboard.*.log
 streamlit_dashboard.pid
+
+# Local planning/mockup artifacts
+.superpowers/
