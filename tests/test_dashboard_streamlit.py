@@ -25,6 +25,7 @@ from dashboard_streamlit import (
     list_project_run_dirs,
     latest_project_run_name,
     load_upload_manifest,
+    make_pipeline_run_request,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -379,6 +380,13 @@ def test_project_run_lock_prevents_second_parallel_run(tmp_path):
 
     assert acquire_project_run_lock("950", projects_dir=tmp_path) is True
     release_project_run_lock("950", projects_dir=tmp_path)
+
+
+def test_make_pipeline_run_request_stores_project_and_routes():
+    assert make_pipeline_run_request("950", ("route_1", "route_2")) == {
+        "project": "950",
+        "routes": ["route_1", "route_2"],
+    }
 
 
 def test_latest_project_run_name_returns_newest_run(tmp_path):

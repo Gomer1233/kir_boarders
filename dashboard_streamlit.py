@@ -125,6 +125,15 @@ def release_project_run_lock(project_name, projects_dir=DATA_PROJECTS_DIR):
         pass
 
 
+def make_pipeline_run_request(project_name, routes):
+    return {"project": project_name, "routes": list(routes)}
+
+
+def queue_pipeline_run(project_name, routes):
+    st.session_state["pending_pipeline_run"] = make_pipeline_run_request(project_name, routes)
+    st.session_state["pipeline_running"] = True
+
+
 def list_run_dirs():
     return list_legacy_run_dirs(DATA_DIR)
 
@@ -954,64 +963,81 @@ def main():
                 (f"Run {route_label('route_2')}", ["route_2"]),
                 (f"Run {route_label('both')}", ["route_1", "route_2"]),
             ]:
-                if st.button(label, disabled=project_is_running):
-                    try:
-                        if not acquire_project_run_lock(selected_project):
-                            st.warning("Прогон уже выполняется для этого проекта. Дождитесь завершения текущего запуска.")
-                            st.stop()
-                        st.session_state["pipeline_running"] = True
-                        st.warning("Прогон выполняется. Остальные действия заблокированы до завершения.")
-                        stop_col, _ = st.columns([1, 2])
-                        stop_col.button(
-                            "Остановить прогон",
-                            disabled=True,
-                            help="В MVP прогон нельзя остановить из UI. Дождитесь завершения или остановите Streamlit в терминале.",
-                        )
-                        for route_name in routes:
-                            kir_file = st.session_state.get(f"{route_name}_kir_upload")
-                            poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
-                            if kir_file and poteri_file:
-                                save_uploaded_route_files(
-                                    selected_project,
-                                    route_name,
-                                    kir_file,
-                                    poteri_file,
-                                    base_dir=DATA_PROJECTS_DIR,
-                                )
-                            if not project_route_uploads_exist(selected_project, route_name):
-                                st.error(
-                                    f"Upload KIR and Poteri files for {route_label(route_name)} first, "
-                                    "or click Save uploaded files."
-                                )
-                                st.stop()
-                        progress_bar = st.progress(0, text=format_running_message(selected_project, routes))
-                        progress_text = st.empty()
-                        completed_steps = {"count": 0}
-                        total_steps = max(1, len(routes) * 9)
+                st.button(
+                    label,
+                    disabled=project_is_running,
+                    on_click=queue_pipeline_run,
+                    args=(selected_project, routes),
+                )
 
-                        def progress_callback(stage, message):
-                            completed_steps["count"] += 1
-                            value = min(100, int(completed_steps["count"] / total_steps * 100))
-                            progress_bar.progress(value, text=message)
-                            progress_text.caption(message)
-
-                        results = run_project_routes(
-                            selected_project,
-                            routes,
-                            load_config(),
-                            base_dir=DATA_PROJECTS_DIR,
-                            progress_callback=progress_callback,
-                        )
-                        progress_bar.progress(100, text="Pipeline finished.")
-                        for result in results:
-                            st.success(format_run_result(result))
-                        if results:
-                            st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
-                    except Exception as exc:
-                        st.exception(exc)
-                    finally:
+            pending_run = st.session_state.get("pending_pipeline_run")
+            if pending_run and pending_run["project"] == selected_project:
+                routes = pending_run["routes"]
+                lock_acquired = False
+                try:
+                    if not acquire_project_run_lock(selected_project):
+                        st.warning("?????? ??? ??????????? ??? ????? ???????. ????????? ?????????? ???????? ???????.")
                         st.session_state["pipeline_running"] = False
+                        st.session_state.pop("pending_pipeline_run", None)
+                        st.stop()
+                    lock_acquired = True
+                    st.warning("?????? ???????????. ????????? ???????? ????????????? ?? ??????????.")
+                    stop_col, _ = st.columns([1, 2])
+                    stop_col.button(
+                        "?????????? ??????",
+                        disabled=True,
+                        help="? MVP ?????? ?????? ?????????? ?? UI. ????????? ?????????? ??? ?????????? Streamlit ? ?????????.",
+                    )
+                    for route_name in routes:
+                        kir_file = st.session_state.get(f"{route_name}_kir_upload")
+                        poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
+                        if kir_file and poteri_file:
+                            save_uploaded_route_files(
+                                selected_project,
+                                route_name,
+                                kir_file,
+                                poteri_file,
+                                base_dir=DATA_PROJECTS_DIR,
+                            )
+                        if not project_route_uploads_exist(selected_project, route_name):
+                            st.error(
+                                f"Upload KIR and Poteri files for {route_label(route_name)} first, "
+                                "or click Save uploaded files."
+                            )
+                            st.stop()
+                    progress_bar = st.progress(0, text=format_running_message(selected_project, routes))
+                    progress_text = st.empty()
+                    completed_steps = {"count": 0}
+                    total_steps = max(1, len(routes) * 9)
+
+                    def progress_callback(stage, message):
+                        completed_steps["count"] += 1
+                        value = min(100, int(completed_steps["count"] / total_steps * 100))
+                        progress_bar.progress(value, text=message)
+                        progress_text.caption(message)
+
+                    results = run_project_routes(
+                        selected_project,
+                        routes,
+                        load_config(),
+                        base_dir=DATA_PROJECTS_DIR,
+                        progress_callback=progress_callback,
+                    )
+                    progress_bar.progress(100, text="Pipeline finished.")
+                    for result in results:
+                        st.success(format_run_result(result))
+                    if results:
+                        st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
+                except Exception as exc:
+                    st.exception(exc)
+                finally:
+                    st.session_state["pipeline_running"] = False
+                    st.session_state.pop("pending_pipeline_run", None)
+                    if lock_acquired:
                         release_project_run_lock(selected_project)
+            elif pending_run:
+                st.warning("?????? ??????? ??? ??????? ???????. ????????? ?????????? ???????? ???????.")
+                st.stop()
 
         with st.sidebar.expander("3. Open dashboard", expanded=True):
             st.caption("Откройте дашборд только после готового прогона. Выбор run-а сам по себе данные не загружает.")
