@@ -154,6 +154,15 @@ def test_prepare_bin_chart_table_uses_bin_midpoints_and_widths_for_geometry():
     assert chart_table["bar_width"].round(3).tolist() == [3469.068, 1734.534]
 
 
+def test_prepare_bin_chart_table_preserves_chart_columns_for_empty_input():
+    table = pd.DataFrame(columns=["bin_start", "bin_end", "bin", "count", "store_count", "share"])
+
+    chart_table = prepare_bin_chart_table(table)
+
+    assert chart_table.empty
+    assert {"bin_mid", "bar_width"}.issubset(chart_table.columns)
+
+
 def test_build_bin_table_counts_rows_per_interval():
     table = build_bin_table(pd.Series([0, 5, 10, 15, 20]), bins=2)
 

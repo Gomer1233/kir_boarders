@@ -214,6 +214,8 @@ def collapse_tail_bins(bin_table, head_bins):
 def prepare_bin_chart_table(bin_table):
     chart_table = bin_table.copy()
     if chart_table.empty:
+        chart_table["bin_mid"] = pd.Series(dtype="float64")
+        chart_table["bar_width"] = pd.Series(dtype="float64")
         return chart_table
 
     chart_table["bin_mid"] = (pd.to_numeric(chart_table["bin_start"]) + pd.to_numeric(chart_table["bin_end"])) / 2
@@ -558,27 +560,30 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     try:
         import plotly.express as px
 
-        bar_value_column = metric_bar_value_column(bin_table)
-        chart_bin_table = prepare_bin_chart_table(chart_bin_table)
-        fig = px.bar(
-            chart_bin_table,
-            x="bin_mid",
-            y=bar_value_column,
-            text=bar_value_column,
-            hover_data=["bin", "bin_start", "bin_end", "share"],
-            title=f"Fixed-width bin distribution: {metric}",
-        )
-        fig.update_traces(
-            width=chart_bin_table["bar_width"],
-            texttemplate="%{text:,}",
-            textposition="outside",
-            cliponaxis=False,
-        )
-        fig.update_xaxes(title_text="metric value")
-        fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
-        fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
-        fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
-        st.plotly_chart(fig, use_container_width=True)
+        if bin_table.empty:
+            st.info("No valid numeric metric values after filters. Bin chart is unavailable.")
+        else:
+            bar_value_column = metric_bar_value_column(bin_table)
+            chart_bin_table = prepare_bin_chart_table(chart_bin_table)
+            fig = px.bar(
+                chart_bin_table,
+                x="bin_mid",
+                y=bar_value_column,
+                text=bar_value_column,
+                hover_data=["bin", "bin_start", "bin_end", "share"],
+                title=f"Fixed-width bin distribution: {metric}",
+            )
+            fig.update_traces(
+                width=chart_bin_table["bar_width"],
+                texttemplate="%{text:,}",
+                textposition="outside",
+                cliponaxis=False,
+            )
+            fig.update_xaxes(title_text="metric value")
+            fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
+            fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
+            fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
+            st.plotly_chart(fig, use_container_width=True)
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; showing a basic Streamlit chart.")
         st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)
