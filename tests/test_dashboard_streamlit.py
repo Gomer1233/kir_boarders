@@ -16,6 +16,7 @@ from dashboard_streamlit import (
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
+    network_chart_color,
     sort_metric_columns,
 )
 
@@ -88,6 +89,12 @@ def test_format_percentile_card_separates_count_from_threshold():
 def test_metric_bar_value_column_prefers_unique_store_counts():
     assert metric_bar_value_column(pd.DataFrame({"count": [1], "store_count": [1]})) == "store_count"
     assert metric_bar_value_column(pd.DataFrame({"count": [1]})) == "count"
+
+
+def test_network_chart_color_uses_soft_brand_colors():
+    assert network_chart_color("ТС Пятерочка") == "#f06a6a"
+    assert network_chart_color("ТС Перекресток") == "#64b878"
+    assert network_chart_color("Unknown") == "#79bff2"
 
 
 def test_collapse_tail_bins_keeps_head_and_sums_remaining_bins():

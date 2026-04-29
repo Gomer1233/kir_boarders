@@ -159,6 +159,15 @@ def metric_bar_value_column(bin_table):
     return "store_count" if "store_count" in bin_table.columns else "count"
 
 
+def network_chart_color(network_name):
+    name = str(network_name).lower()
+    if "\u043f\u044f\u0442\u0435\u0440" in name or "pyater" in name:
+        return "#f06a6a"
+    if "\u043f\u0435\u0440\u0435\u043a" in name or "perek" in name:
+        return "#64b878"
+    return "#79bff2"
+
+
 def collapse_tail_bins(bin_table, head_bins):
     if bin_table.empty:
         return bin_table.copy()
@@ -626,10 +635,15 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
                 network_df = filter_visual_outliers(network_df, "_metric", column, quantile=outlier_percentile / 100)
             chart_df = sample_for_plot(network_df)
             with container:
-                st.plotly_chart(
-                    px.scatter(chart_df, x="_metric", y=column, opacity=0.45, title=network_name),
-                    use_container_width=True,
+                fig = px.scatter(chart_df, x="_metric", y=column, opacity=0.38, title=network_name)
+                fig.update_traces(
+                    marker={
+                        "color": network_chart_color(network_name),
+                        "size": 5,
+                        "line": {"width": 0},
+                    }
                 )
+                st.plotly_chart(fig, use_container_width=True)
                 if hide_outliers:
                     st.caption(f"Visual cutoff: P{outlier_percentile}; shown {len(chart_df):,} points.")
 
