@@ -8,8 +8,10 @@ from dashboard_streamlit import (
     build_bin_table,
     calculate_relationship_stats,
     filter_zero_metric_values,
+    format_percentile_card,
     get_numeric_metric_columns,
     metric_summary,
+    metric_bar_value_column,
     sort_metric_columns,
 )
 
@@ -71,6 +73,17 @@ def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
     assert filtered_metric.tolist()[:1] == [1.0]
     assert pd.isna(filtered_metric.iloc[1])
     assert pd.isna(filtered_metric.iloc[2])
+
+
+def test_format_percentile_card_separates_count_from_threshold():
+    card = format_percentile_card("Stores <= P85", {"count": 21140, "threshold": 4197.33})
+
+    assert card == {"label": "Stores <= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+
+
+def test_metric_bar_value_column_prefers_unique_store_counts():
+    assert metric_bar_value_column(pd.DataFrame({"count": [1], "store_count": [1]})) == "store_count"
+    assert metric_bar_value_column(pd.DataFrame({"count": [1]})) == "count"
 
 
 def test_build_bin_table_counts_rows_per_interval():

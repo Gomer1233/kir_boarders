@@ -147,6 +147,18 @@ def filter_zero_metric_values(df, numeric_metric):
     return df.loc[mask].copy(), numeric.loc[mask]
 
 
+def format_percentile_card(label, item):
+    return {
+        "label": label,
+        "count": f"{int(item['count']):,}",
+        "threshold": f"Threshold: {_format_number(item['threshold'])}",
+    }
+
+
+def metric_bar_value_column(bin_table):
+    return "store_count" if "store_count" in bin_table.columns else "count"
+
+
 def build_bin_table(series, bins=20):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -421,32 +433,31 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     chart_data = sample_for_plot(filtered.assign(_metric=numeric_metric))
 
     pc1, pc2, pc3 = st.columns(3)
-    pc1.metric(
-        "Stores <= P25",
-        percentile_counts["p25"]["count"],
-        _format_number(percentile_counts["p25"]["threshold"]),
-    )
-    pc2.metric(
-        "Stores <= P85",
-        percentile_counts["p85"]["count"],
-        _format_number(percentile_counts["p85"]["threshold"]),
-    )
-    pc3.metric(
-        f"Stores <= P{custom_percentile}",
-        percentile_counts["custom"]["count"],
-        _format_number(percentile_counts["custom"]["threshold"]),
-    )
+    for container, card in zip(
+        [pc1, pc2, pc3],
+        [
+            format_percentile_card("Stores <= P25", percentile_counts["p25"]),
+            format_percentile_card("Stores <= P85", percentile_counts["p85"]),
+            format_percentile_card(f"Stores <= P{custom_percentile}", percentile_counts["custom"]),
+        ],
+    ):
+        container.markdown(f"**{card['label']}**")
+        container.markdown(f"### {card['count']}")
+        container.caption(card["threshold"])
 
     try:
         import plotly.express as px
 
+        bar_value_column = metric_bar_value_column(bin_table)
         fig = px.bar(
             bin_table,
             x="bin_start",
-            y="store_count" if "store_count" in bin_table.columns else "count",
+            y=bar_value_column,
+            text=bar_value_column,
             hover_data=["bin", "share"],
             title=f"Fixed-width bin distribution: {metric}",
         )
+        fig.update_traces(texttemplate="%{text:,}", textposition="outside", cliponaxis=False)
         fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
         fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
         fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
