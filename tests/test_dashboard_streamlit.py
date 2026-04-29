@@ -21,7 +21,9 @@ from dashboard_streamlit import (
     metric_summary,
     metric_bar_value_column,
     network_chart_color,
+    normalize_new_project_input,
     sort_metric_columns,
+    project_select_options,
 )
 
 TS_COL = "\u0422\u0421"
@@ -236,6 +238,22 @@ def test_list_project_run_dirs_returns_project_runs(tmp_path):
 def test_data_projects_dir_points_under_data():
     assert DATA_PROJECTS_DIR.name == "projects"
     assert DATA_PROJECTS_DIR.parent.name == "data"
+
+
+def test_project_select_options_keeps_empty_project_list_empty():
+    assert project_select_options([]) == []
+
+
+def test_project_select_options_sorts_existing_projects():
+    assert project_select_options(["020", "003", "950"]) == ["003", "020", "950"]
+
+
+def test_normalize_new_project_input_strips_whitespace():
+    assert normalize_new_project_input("  003  ") == "003"
+
+
+def test_normalize_new_project_input_collapses_inner_spaces():
+    assert normalize_new_project_input(" KIR 003 ") == "KIR_003"
 
 
 from dashboard_streamlit import read_final_data_with_progress

@@ -4,7 +4,7 @@ import re
 
 import pandas as pd
 
-from scripts.project_registry import list_projects
+from scripts.project_registry import create_project, list_projects, sanitize_project_name
 
 try:
     import streamlit as st
@@ -73,6 +73,14 @@ def list_project_run_dirs(project_name, projects_dir=DATA_PROJECTS_DIR):
 
 def list_run_dirs():
     return list_legacy_run_dirs(DATA_DIR)
+
+
+def project_select_options(projects):
+    return sorted(projects)
+
+
+def normalize_new_project_input(value):
+    return sanitize_project_name(value)
 
 
 def run_file_paths(run_dir):
@@ -726,6 +734,18 @@ def main():
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.title("KIR Dashboard")
 
+    st.sidebar.subheader("Projects")
+    new_project_name = st.sidebar.text_input("New project name", placeholder="003")
+    if st.sidebar.button("Create project"):
+        try:
+            project_name = normalize_new_project_input(new_project_name)
+            create_project(project_name, base_dir=DATA_PROJECTS_DIR)
+            st.sidebar.success(f"Project created: {project_name}")
+            st.rerun()
+        except Exception as exc:
+            st.sidebar.error(str(exc))
+
+    st.sidebar.divider()
     run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])
     if run_source == "Legacy runs":
         run_dirs = list_legacy_run_dirs()
@@ -734,7 +754,7 @@ def main():
             return
         run_dir = st.sidebar.selectbox("Run", run_dirs, format_func=lambda path: path.name)
     else:
-        projects = list_projects(DATA_PROJECTS_DIR)
+        projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
         if not projects:
             st.warning("No projects found in data/projects/.")
             return
