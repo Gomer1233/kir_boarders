@@ -4,8 +4,9 @@ import re
 
 import pandas as pd
 
+from main_final_v3 import load_config
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
-from scripts.upload_runner import save_uploaded_route_files
+from scripts.upload_runner import run_project_routes, save_uploaded_route_files
 
 try:
     import streamlit as st
@@ -93,6 +94,17 @@ def routes_for_ui_mode(mode):
     if mode not in route_modes:
         raise ValueError(f"Unsupported route mode: {mode}")
     return route_modes[mode]
+
+
+def format_run_result(result):
+    paths = result.get("paths", {})
+    lines = [
+        f"Route: {result.get('route', 'unknown')}",
+        f"Run: {result.get('run_dir', 'unknown')}",
+        f"Final: {paths.get('final', 'unknown')}",
+        f"Raw: {paths.get('raw', 'unknown')}",
+    ]
+    return "\n".join(lines)
 
 
 def run_file_paths(run_dir):
@@ -789,6 +801,27 @@ def main():
                         st.caption(f"Manifest: {result['manifest_path']}")
                     except Exception as exc:
                         st.error(str(exc))
+
+        with st.sidebar.expander("Run pipeline", expanded=False):
+            run_project = st.selectbox("Run project", current_projects, key="run_project")
+            for label, routes in [
+                ("Run route_1", ["route_1"]),
+                ("Run route_2", ["route_2"]),
+                ("Run both", ["route_1", "route_2"]),
+            ]:
+                if st.button(label):
+                    try:
+                        with st.spinner(f"Running {', '.join(routes)} for {run_project}..."):
+                            results = run_project_routes(
+                                run_project,
+                                routes,
+                                load_config(),
+                                base_dir=DATA_PROJECTS_DIR,
+                            )
+                        for result in results:
+                            st.success(format_run_result(result))
+                    except Exception as exc:
+                        st.exception(exc)
 
     st.sidebar.divider()
     run_source = st.sidebar.radio("Run source", ["Legacy runs", "Project runs"])

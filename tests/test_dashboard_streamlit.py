@@ -6,6 +6,7 @@ from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
     FACTORY_COL,
     FILTER_COLUMNS,
+    format_run_result,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
@@ -270,6 +271,24 @@ def test_routes_for_ui_mode_rejects_unknown_mode():
         assert "Unsupported route mode" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+
+
+def test_format_run_result_includes_route_run_and_output_paths(tmp_path):
+    result = {
+        "route": "route_1",
+        "run_dir": tmp_path / "run_001_route_1",
+        "paths": {
+            "final": tmp_path / "run_001_route_1" / "final_clean_data.xlsx",
+            "raw": tmp_path / "run_001_route_1" / "merged_raw.xlsx",
+        },
+    }
+
+    text = format_run_result(result)
+
+    assert "route_1" in text
+    assert "run_001_route_1" in text
+    assert "final_clean_data.xlsx" in text
+    assert "merged_raw.xlsx" in text
 
 
 from dashboard_streamlit import read_final_data_with_progress
