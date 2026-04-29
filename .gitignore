@@ -4,6 +4,7 @@ __pycache__/
 
 # Generated run artifacts
 data/run_*/
+data/projects/
 logs/processing_log_*.md
 logs/*.log
 
