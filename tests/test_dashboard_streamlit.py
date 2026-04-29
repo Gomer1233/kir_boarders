@@ -129,7 +129,13 @@ def test_sample_for_plot_limits_large_dataframes():
     assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
 
 
-from dashboard_streamlit import build_bin_table_by_width, percentile_store_counts, split_by_network
+from dashboard_streamlit import (
+    adjust_bin_width,
+    build_bin_table_by_width,
+    default_bin_width,
+    percentile_store_counts,
+    split_by_network,
+)
 
 
 def test_build_bin_table_by_width_uses_fixed_bin_width():
@@ -138,6 +144,17 @@ def test_build_bin_table_by_width_uses_fixed_bin_width():
     assert table["bin_start"].tolist() == [0, 10, 20]
     assert table["bin_end"].tolist() == [10, 20, 30]
     assert table["count"].tolist() == [2, 2, 1]
+
+
+def test_default_bin_width_is_small_editable_starting_value():
+    assert default_bin_width(pd.Series([0, 300])) == 10
+    assert default_bin_width(pd.Series([0, 1])) == 1
+
+
+def test_adjust_bin_width_uses_explicit_button_steps_and_never_goes_below_minimum():
+    assert adjust_bin_width(100, 10) == 110
+    assert adjust_bin_width(100, -10) == 90
+    assert adjust_bin_width(5, -10) == 1
 
 
 def test_percentile_store_counts_counts_values_below_thresholds():

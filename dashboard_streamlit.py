@@ -177,6 +177,22 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
     return pd.DataFrame(rows)
 
 
+def default_bin_width(series, target_bins=30, minimum=1):
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return float(minimum)
+    span = float(numeric.max() - numeric.min())
+    return max(float(span / target_bins), float(minimum))
+
+
+def adjust_bin_width(current, delta, minimum=1):
+    return max(float(minimum), float(current) + float(delta))
+
+
+def _adjust_session_bin_width(key, delta):
+    st.session_state[key] = adjust_bin_width(st.session_state.get(key, 1), delta)
+
+
 def percentile_store_counts(series, custom_percentile, store_series=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -318,12 +334,21 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     stats_df = pd.DataFrame([summary])
     st.dataframe(stats_df, use_container_width=True)
 
-    valid_metric = numeric_metric.dropna()
-    default_width = 1.0
-    if not valid_metric.empty:
-        span = float(valid_metric.max() - valid_metric.min())
-        default_width = max(span / 30, 1.0)
-    bin_width = st.number_input("Bin width", min_value=0.000001, value=float(default_width), step=float(default_width))
+    bin_width_key = f"bin_width_{metric}"
+    if bin_width_key not in st.session_state:
+        st.session_state[bin_width_key] = default_bin_width(numeric_metric)
+    bin_width = st.number_input(
+        "Bin width",
+        min_value=1.0,
+        step=1.0,
+        key=bin_width_key,
+    )
+    step_columns = st.columns(6)
+    for column, (label, delta) in zip(
+        step_columns,
+        [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+    ):
+        column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
     custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, value=50)
     store_series = filtered[FACTORY_COL] if FACTORY_COL in filtered.columns else None
     bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
