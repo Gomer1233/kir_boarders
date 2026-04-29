@@ -139,11 +139,14 @@ def format_running_message(project_name, routes):
 
 def format_run_result(result):
     paths = result.get("paths", {})
+    final_path = paths.get("final_clean") or paths.get("final") or "unknown"
+    raw_path = paths.get("merged_raw") or paths.get("raw") or "unknown"
     lines = [
+        "Файлы успешно созданы, перехожу к сборке дашборда.",
         f"Route: {route_label(result.get('route', 'unknown'))}",
-        f"Run: {result.get('run_dir', 'unknown')}",
-        f"Final: {paths.get('final', 'unknown')}",
-        f"Raw: {paths.get('raw', 'unknown')}",
+        f"Run folder: {result.get('run_dir', 'unknown')}",
+        f"Final clean data: {final_path}",
+        f"Merged raw: {raw_path}",
     ]
     return "\n".join(lines)
 

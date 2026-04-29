@@ -292,17 +292,20 @@ def test_format_run_result_includes_route_run_and_output_paths(tmp_path):
         "route": "route_1",
         "run_dir": tmp_path / "run_001_route_1",
         "paths": {
-            "final": tmp_path / "run_001_route_1" / "final_clean_data.xlsx",
-            "raw": tmp_path / "run_001_route_1" / "merged_raw.xlsx",
+            "final_clean": tmp_path / "run_001_route_1" / "final_clean_data.xlsx",
+            "merged_raw": tmp_path / "run_001_route_1" / "merged_raw.xlsx",
         },
     }
 
     text = format_run_result(result)
 
     assert "Route 1: Магазины и Категории" in text
+    assert "Файлы успешно созданы" in text
+    assert "перехожу к сборке дашборда" in text
     assert "run_001_route_1" in text
     assert "final_clean_data.xlsx" in text
     assert "merged_raw.xlsx" in text
+    assert "unknown" not in text
 
 
 def test_format_running_message_uses_readable_routes_and_project():
