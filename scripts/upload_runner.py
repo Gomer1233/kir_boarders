@@ -2,7 +2,12 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from main_final_v3 import get_route_config
+from scripts.excel_reader import read_excel_loss_safe
+from scripts.merge_data_v3 import merge_route_data
+from scripts.pipeline import assert_audit_invariants, write_route_outputs
 from scripts.project_registry import PROJECTS_DIR, VALID_ROUTES, project_dir, sanitize_project_name
+from scripts.quality_flags import add_quality_flags
 
 
 KIR_SOURCE_NAME = "kir_source.xlsx"
@@ -30,6 +35,19 @@ def _validate_route(route_name):
 def _project_upload_route_dir(project_name, route_name, base_dir=PROJECTS_DIR):
     _validate_route(route_name)
     return project_dir(project_name, base_dir=base_dir) / "uploads" / route_name
+
+
+def build_project_route_config(project_name, route_name, config, base_dir=PROJECTS_DIR) -> dict:
+    route = dict(get_route_config(config, route_name))
+    upload_dir = _project_upload_route_dir(project_name, route_name, base_dir=base_dir)
+    route["svod"] = upload_dir / KIR_SOURCE_NAME
+    route["poteri"] = upload_dir / POTERI_SOURCE_NAME
+    return route
+
+
+def _require_upload_file(path: Path) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing upload file: {path}")
 
 
 def save_uploaded_route_files(project_name, route_name, kir_file, poteri_file, base_dir=PROJECTS_DIR) -> dict:
@@ -62,3 +80,53 @@ def save_uploaded_route_files(project_name, route_name, kir_file, poteri_file, b
         "poteri_path": poteri_path,
         "manifest_path": manifest_path,
     }
+
+
+def run_project_route(
+    project_name,
+    route_name,
+    config,
+    base_dir=PROJECTS_DIR,
+    read_excel=read_excel_loss_safe,
+    merge_data=merge_route_data,
+    add_flags=add_quality_flags,
+    assert_invariants=assert_audit_invariants,
+    write_outputs=write_route_outputs,
+) -> dict:
+    name = sanitize_project_name(project_name)
+    route_conf = build_project_route_config(name, route_name, config, base_dir=base_dir)
+    _require_upload_file(route_conf["svod"])
+    _require_upload_file(route_conf["poteri"])
+
+    from scripts.project_registry import next_project_run_dir
+
+    run_dir = next_project_run_dir(name, route_name, base_dir=base_dir)
+    kir_df = read_excel(route_conf["svod"])
+    poteri_df = read_excel(route_conf["poteri"])
+    raw_df, diagnostics = merge_data(
+        kir_df,
+        poteri_df,
+        route_conf["merge_key"],
+        config["columns"]["poteri"]["rename_map"],
+    )
+    final_df = add_flags(raw_df)
+    excluded_df = raw_df.iloc[0:0].copy()
+    excluded_df["exclude_reason"] = []
+
+    diagnostics.update(
+        {
+            "project_name": name,
+            "route": route_name,
+            "final_row_count": len(final_df),
+            "excluded_row_count": len(excluded_df),
+            "audit_invariant_ok": len(final_df) + len(excluded_df) == len(raw_df),
+        }
+    )
+
+    assert_invariants(raw_df, final_df, excluded_df)
+    paths = write_outputs(run_dir, raw_df, final_df, excluded_df, diagnostics)
+    return {"project": name, "route": route_name, "run_dir": run_dir, "paths": paths, "diagnostics": diagnostics}
+
+
+def run_project_routes(project_name, routes, config, base_dir=PROJECTS_DIR) -> list[dict]:
+    return [run_project_route(project_name, route, config, base_dir=base_dir) for route in routes]
