@@ -112,10 +112,19 @@ def routes_for_ui_mode(mode):
     return route_modes[mode]
 
 
+def route_label(route_name):
+    labels = {
+        "route_1": "Route 1: Week + TS + Category + Plant",
+        "route_2": "Route 2: Week + TS + Plant",
+        "both": "Both routes",
+    }
+    return labels.get(route_name, route_name)
+
+
 def format_run_result(result):
     paths = result.get("paths", {})
     lines = [
-        f"Route: {result.get('route', 'unknown')}",
+        f"Route: {route_label(result.get('route', 'unknown'))}",
         f"Run: {result.get('run_dir', 'unknown')}",
         f"Final: {paths.get('final', 'unknown')}",
         f"Raw: {paths.get('raw', 'unknown')}",
@@ -817,9 +826,15 @@ def main():
             latest_run = latest_project_run_name(upload_project)
             if latest_run:
                 st.caption(f"Latest run: {latest_run}")
-            route_mode = st.selectbox("Upload route mode", ["route_1", "route_2", "both"], key="upload_route_mode")
+            route_mode = st.selectbox(
+                "Upload route mode",
+                ["route_1", "route_2", "both"],
+                format_func=route_label,
+                key="upload_route_mode",
+            )
             for route_name in routes_for_ui_mode(route_mode):
-                st.markdown(f"**{route_name}**")
+                route_display = route_label(route_name)
+                st.markdown(f"**{route_display}**")
                 manifest = load_upload_manifest(upload_project, route_name)
                 if manifest:
                     st.caption(
@@ -829,16 +844,16 @@ def main():
                         f"{manifest.get('saved_at', 'n/a')}"
                     )
                 kir_file = st.file_uploader(
-                    f"KIR file for {route_name}",
+                    f"KIR file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_kir_upload",
                 )
                 poteri_file = st.file_uploader(
-                    f"Poteri file for {route_name}",
+                    f"Poteri file for {route_display}",
                     type=["xlsx", "xls"],
                     key=f"{route_name}_poteri_upload",
                 )
-                if st.button(f"Save {route_name} uploads", disabled=not (kir_file and poteri_file)):
+                if st.button(f"Save uploads for {route_display}", disabled=not (kir_file and poteri_file)):
                     try:
                         result = save_uploaded_route_files(
                             upload_project,
@@ -847,7 +862,7 @@ def main():
                             poteri_file,
                             base_dir=DATA_PROJECTS_DIR,
                         )
-                        st.success(f"Saved uploads for {route_name}")
+                        st.success(f"Saved uploads for {route_display}")
                         st.caption(f"KIR: {result['kir_path']}")
                         st.caption(f"Poteri: {result['poteri_path']}")
                         st.caption(f"Manifest: {result['manifest_path']}")
@@ -857,9 +872,9 @@ def main():
         with st.sidebar.expander("Run pipeline", expanded=False):
             run_project = st.selectbox("Run project", current_projects, key="run_project")
             for label, routes in [
-                ("Run route_1", ["route_1"]),
-                ("Run route_2", ["route_2"]),
-                ("Run both", ["route_1", "route_2"]),
+                (f"Run {route_label('route_1')}", ["route_1"]),
+                (f"Run {route_label('route_2')}", ["route_2"]),
+                (f"Run {route_label('both')}", ["route_1", "route_2"]),
             ]:
                 if st.button(label):
                     try:

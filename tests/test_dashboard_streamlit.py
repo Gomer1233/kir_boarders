@@ -17,6 +17,7 @@ from dashboard_streamlit import (
     format_percentile_card,
     render_percentile_card_html,
     get_numeric_metric_columns,
+    route_label,
     list_legacy_run_dirs,
     list_project_run_dirs,
     latest_project_run_name,
@@ -266,6 +267,13 @@ def test_routes_for_ui_mode_maps_single_and_both_modes():
     assert routes_for_ui_mode("route_1") == ["route_1"]
     assert routes_for_ui_mode("route_2") == ["route_2"]
     assert routes_for_ui_mode("both") == ["route_1", "route_2"]
+
+
+def test_route_label_uses_business_names_for_ui():
+    assert route_label("route_1") == "Route 1: Week + TS + Category + Plant"
+    assert route_label("route_2") == "Route 2: Week + TS + Plant"
+    assert route_label("both") == "Both routes"
+    assert route_label("unknown") == "unknown"
 
 
 def test_routes_for_ui_mode_rejects_unknown_mode():
