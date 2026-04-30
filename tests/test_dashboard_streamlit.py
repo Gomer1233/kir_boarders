@@ -13,6 +13,8 @@ from dashboard_streamlit import (
     FILTER_COLUMNS,
     format_run_result,
     format_running_message,
+    metric_analysis_context,
+    render_metric_analysis_context_html,
     pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
@@ -97,6 +99,61 @@ def test_metric_summary_contains_tz_statistics():
     assert summary["zero_count"] == 1
     assert summary["zero_share"] == 1 / 3
     assert summary["missing_share"] == 1 / 4
+
+
+def test_metric_analysis_context_describes_store_and_category_route_with_selected_categories():
+    df = pd.DataFrame(
+        {
+            TS_COL: ["ТС Пятерочка", "ТС Перекресток"],
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["Молоко", "Хлеб"],
+        }
+    )
+
+    context = metric_analysis_context(
+        df,
+        {"\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["Молоко", "Хлеб"], TS_COL: ["ТС Пятерочка"]},
+    )
+
+    assert context == {
+        "scope": "Магазины и Категории",
+        "categories": "Молоко, Хлеб",
+        "networks": "ТС Пятерочка",
+    }
+
+
+def test_metric_analysis_context_summarizes_all_categories_without_overloading_ui():
+    df = pd.DataFrame(
+        {
+            TS_COL: ["A", "B", "B"],
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["Cat 1", "Cat 2", "Cat 3"],
+        }
+    )
+
+    context = metric_analysis_context(df, {})
+
+    assert context["scope"] == "Магазины и Категории"
+    assert context["categories"] == "Все категории (3)"
+    assert context["networks"] == "A, B"
+
+
+def test_metric_analysis_context_describes_store_only_route():
+    df = pd.DataFrame({TS_COL: ["A", "B"]})
+
+    context = metric_analysis_context(df, {})
+
+    assert context == {"scope": "Магазины", "categories": None, "networks": "A, B"}
+
+
+def test_render_metric_analysis_context_html_is_compact_and_escapes_values():
+    html = render_metric_analysis_context_html(
+        {"scope": "Магазины и Категории", "categories": "A <B>", "networks": "ТС Пятерочка"}
+    )
+
+    assert "Что анализируем" in html
+    assert "Магазины и Категории" in html
+    assert "A &lt;B&gt;" in html
+    assert "A <B>" not in html
+    assert "analysis-context" in html
 
 
 def test_filter_zero_metric_values_removes_only_numeric_zero_rows():

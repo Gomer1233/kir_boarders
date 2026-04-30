@@ -368,6 +368,64 @@ def apply_filter_values(df, filter_values):
     return filtered
 
 
+def _compact_context_values(values, max_items=4):
+    clean_values = [str(value) for value in values if pd.notna(value)]
+    if not clean_values:
+        return "\u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445"
+    if len(clean_values) <= max_items:
+        return ", ".join(clean_values)
+    visible = ", ".join(clean_values[:max_items])
+    return f"{visible} +{len(clean_values) - max_items}"
+
+
+def metric_analysis_context(filtered, filter_values):
+    filter_values = filter_values or {}
+    has_category = CATEGORY_COL in filtered.columns
+    context = {
+        "scope": "\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b \u0438 \u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438" if has_category else "\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b",
+        "categories": None,
+        "networks": None,
+    }
+    if has_category:
+        selected_categories = filter_values.get(CATEGORY_COL) or []
+        if selected_categories:
+            context["categories"] = _compact_context_values(selected_categories)
+        else:
+            category_count = int(filtered[CATEGORY_COL].dropna().nunique())
+            context["categories"] = f"\u0412\u0441\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 ({category_count})"
+    if TS_COL in filtered.columns:
+        selected_networks = filter_values.get(TS_COL) or []
+        network_values = selected_networks if selected_networks else filtered[TS_COL].dropna().unique().tolist()
+        context["networks"] = _compact_context_values(network_values, max_items=3)
+    return context
+
+
+def render_metric_analysis_context_html(context):
+    chips = [
+        ("\u0420\u0430\u0437\u0440\u0435\u0437", context.get("scope")),
+    ]
+    if context.get("categories"):
+        chips.append(("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438", context["categories"]))
+    if context.get("networks"):
+        chips.append(("\u0422\u0421", context["networks"]))
+    chip_html = "".join(
+        '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;'
+        'border:1px solid rgba(148,163,184,0.28);border-radius:999px;background:rgba(15,23,42,0.35);">'
+        f'<span style="color:#94a3b8;font-size:0.76rem;font-weight:760;text-transform:uppercase;letter-spacing:0.06em;">{escape(str(label))}</span>'
+        f'<span style="color:#f8fafc;font-size:0.88rem;font-weight:760;">{escape(str(value))}</span>'
+        '</span>'
+        for label, value in chips
+    )
+    return (
+        '<div class="analysis-context" style="margin:18px 0 14px 0;padding:13px 15px;'
+        'border:1px solid rgba(148,163,184,0.22);border-left:4px solid #60a5fa;'
+        'border-radius:14px;background:linear-gradient(135deg, rgba(96,165,250,0.12), rgba(15,23,42,0.08));">'
+        '<div style="color:#cbd5e1;font-size:0.82rem;font-weight:820;margin-bottom:9px;">\u0427\u0442\u043e \u0430\u043d\u0430\u043b\u0438\u0437\u0438\u0440\u0443\u0435\u043c</div>'
+        f'<div style="display:flex;flex-wrap:wrap;gap:8px;">{chip_html}</div>'
+        '</div>'
+    )
+
+
 def metric_unit_for_metric(metric):
     metric_lower = str(metric).lower()
     if "\u0440\u0443\u0431" in metric_lower or "rub" in metric_lower:
@@ -805,7 +863,7 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
         st.warning("merge_diagnostics.md not found for this run.")
 
 
-def _render_metric_analysis_tab(filtered, metric, numeric_metric):
+def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=None):
     st.subheader("Metric analysis")
     original_summary = metric_summary(numeric_metric)
     hide_zero_values = st.checkbox(
@@ -868,6 +926,7 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
             chart_bin_table = collapse_tail_bins(bin_table, head_bins)
             st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
+    st.markdown(render_metric_analysis_context_html(metric_analysis_context(filtered, filter_values or {})), unsafe_allow_html=True)
     pc1, pc2, pc3 = st.columns(3)
     metric_unit = metric_unit_for_metric(metric)
     for container, card, color in zip(
@@ -1319,7 +1378,7 @@ def main():
     if screen == "Overview":
         _render_audit_tab(run_dir, filtered, numeric_metric)
     elif screen == "Metric analysis":
-        _render_metric_analysis_tab(filtered, metric, numeric_metric)
+        _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
     elif screen == "Group comparison":
         _render_group_comparison_tab(filtered, numeric_metric)
     elif screen == "Poteri relationships":
