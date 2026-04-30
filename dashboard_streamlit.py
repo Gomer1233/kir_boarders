@@ -156,6 +156,10 @@ def allowed_upload_extensions():
     return ["xlsx"]
 
 
+def should_render_upload_widgets(project_is_running):
+    return not project_is_running
+
+
 def project_select_options(projects):
     return sorted(projects)
 
@@ -189,6 +193,13 @@ def format_running_message(project_name, routes):
     return f"Running {route_label(route_name)} for project {project_name}..."
 
 
+def pipeline_progress_value(completed_steps, total_steps, start=10):
+    if total_steps <= 0:
+        return start
+    value = start + int(completed_steps / total_steps * (99 - start))
+    return min(99, max(start, value))
+
+
 def pipeline_status_text(status):
     texts = {
         "active": "\u041f\u0440\u043e\u0433\u043e\u043d \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f. \u041d\u0435 \u0437\u0430\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0432\u043a\u043b\u0430\u0434\u043a\u0443 \u0438 \u043d\u0435 \u043c\u0435\u043d\u044f\u0439\u0442\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0434\u043e \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f.",
@@ -200,6 +211,13 @@ def pipeline_status_text(status):
         "no_ready_runs": "\u0414\u043b\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 \u043f\u0440\u043e\u0433\u043e\u043d\u043e\u0432.",
         "open_dashboard_first": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442, \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0444\u0430\u0439\u043b\u044b, \u0432\u044b\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043f\u0440\u043e\u0433\u043e\u043d \u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 Open dashboard \u0434\u043b\u044f \u0433\u043e\u0442\u043e\u0432\u043e\u0433\u043e run-\u0430.",
         "open_current_project": "\u0412\u044b\u0431\u0440\u0430\u043d \u0434\u0440\u0443\u0433\u043e\u0439 \u043f\u0440\u043e\u0435\u043a\u0442. \u041d\u0430\u0436\u043c\u0438\u0442\u0435 Open dashboard \u0434\u043b\u044f run-\u0430 \u0442\u0435\u043a\u0443\u0449\u0435\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430.",
+        "preparing": "\u0413\u043e\u0442\u043e\u0432\u043b\u044e \u0437\u0430\u043f\u0443\u0441\u043a \u043f\u0430\u0439\u043f\u043b\u0430\u0439\u043d\u0430...",
+        "checking_uploads": "\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u044e \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043d\u044b\u0435 \u0444\u0430\u0439\u043b\u044b...",
+        "saving_uploads": "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u044e \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 \u0444\u0430\u0439\u043b\u044b...",
+        "upload_disabled": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430, \u043f\u043e\u043a\u0430 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u043e\u0433\u043e\u043d.",
+        "stale_lock": "\u041d\u0430\u0439\u0434\u0435\u043d lock-\u0444\u0430\u0439\u043b \u043f\u0440\u0435\u0434\u044b\u0434\u0443\u0449\u0435\u0433\u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0430. \u0415\u0441\u043b\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043f\u0440\u043e\u0433\u043e\u043d \u043d\u0435 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f, \u0441\u0431\u0440\u043e\u0441\u044c\u0442\u0435 lock, \u0447\u0442\u043e\u0431\u044b \u0441\u043d\u043e\u0432\u0430 \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443 \u0444\u0430\u0439\u043b\u043e\u0432.",
+        "reset_lock_button": "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0437\u0430\u0432\u0438\u0441\u0448\u0438\u0439 lock",
+        "finished": "\u041f\u0440\u043e\u0433\u043e\u043d \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d.",
     }
     return texts[status]
 
@@ -935,7 +953,7 @@ def main():
             disabled=True,
             help=pipeline_status_text("stop_help"),
         )
-        top_progress_bar = st.sidebar.progress(0, text="Pipeline is starting...")
+        top_progress_bar = st.sidebar.progress(1, text=pipeline_status_text("preparing"))
         top_progress_text = st.sidebar.empty()
     else:
         top_progress_bar = None
@@ -967,69 +985,147 @@ def main():
 
     if selected_project:
         lock_status = project_run_lock_status(selected_project)
+        pending_run = st.session_state.get("pending_pipeline_run")
         project_is_running = is_running or lock_status["locked"]
-        if lock_status["locked"] and not is_running:
-            st.sidebar.warning(
-                "Найден lock-файл предыдущего прогона. Если сейчас прогон не выполняется, "
-                "сбросьте lock, чтобы снова включить загрузку файлов."
-            )
-            if st.sidebar.button("Сбросить зависший lock"):
-                release_project_run_lock(selected_project)
-                st.rerun()
-        with st.sidebar.expander("1. Upload files", expanded=False):
-            if latest_run:
-                st.caption(f"Latest run: {latest_run}")
-            route_mode = st.selectbox(
-                "Upload route mode",
-                ["route_1", "route_2", "both"],
-                format_func=route_label,
-                key="upload_route_mode",
-                disabled=project_is_running,
-            )
-            for route_name in routes_for_ui_mode(route_mode):
-                route_display = route_label(route_name)
-                st.markdown(f"**{route_display}**")
-                manifest = load_upload_manifest(selected_project, route_name)
-                if manifest:
-                    st.caption(
-                        "Last upload: "
-                        f"KIR `{manifest.get('kir_original_name', 'n/a')}`, "
-                        f"Poteri `{manifest.get('poteri_original_name', 'n/a')}`, "
-                        f"{manifest.get('saved_at', 'n/a')}"
-                    )
-                kir_file = st.file_uploader(
-                    f"KIR file for {route_display}",
-                    type=allowed_upload_extensions(),
-                    key=f"{route_name}_kir_upload",
-                    disabled=project_is_running,
-                )
-                poteri_file = st.file_uploader(
-                    f"Poteri file for {route_display}",
-                    type=allowed_upload_extensions(),
-                    key=f"{route_name}_poteri_upload",
-                    disabled=project_is_running,
-                )
-                if st.button(
-                    "Save uploaded files",
-                    disabled=project_is_running or not (kir_file and poteri_file),
-                    key=f"save_{route_name}",
-                ):
-                    try:
-                        result = save_uploaded_route_files(
+
+        if pending_run and pending_run["project"] == selected_project:
+            routes = pending_run["routes"]
+            lock_acquired = False
+            progress_bar = top_progress_bar or st.sidebar.progress(1, text=pipeline_status_text("preparing"))
+            progress_text = top_progress_text or st.sidebar.empty()
+            progress_bar.progress(1, text=pipeline_status_text("preparing"))
+            progress_text.caption(format_running_message(selected_project, routes))
+            try:
+                if not acquire_project_run_lock(selected_project):
+                    st.warning(pipeline_status_text("already_running"))
+                    st.session_state["pipeline_running"] = False
+                    st.session_state.pop("pending_pipeline_run", None)
+                    st.stop()
+                lock_acquired = True
+                project_is_running = True
+                progress_bar.progress(2, text=pipeline_status_text("checking_uploads"))
+
+                for route_name in routes:
+                    kir_file = st.session_state.get(f"{route_name}_kir_upload")
+                    poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
+                    if kir_file and poteri_file:
+                        progress_bar.progress(
+                            5,
+                            text=f"{pipeline_status_text('saving_uploads')} {route_label(route_name)}",
+                        )
+                        save_uploaded_route_files(
                             selected_project,
                             route_name,
                             kir_file,
                             poteri_file,
                             base_dir=DATA_PROJECTS_DIR,
                         )
-                        st.success(f"Saved uploads for {route_display}")
-                        st.caption(f"KIR: {result['kir_path']}")
-                        st.caption(f"Poteri: {result['poteri_path']}")
-                        st.caption(f"Manifest: {result['manifest_path']}")
-                    except Exception as exc:
-                        st.error(str(exc))
+                    progress_bar.progress(8, text=f"Checking files for {route_label(route_name)}...")
+                    if not project_route_uploads_exist(selected_project, route_name):
+                        st.error(
+                            f"Upload KIR and Poteri files for {route_label(route_name)} first, "
+                            "or click Save uploaded files."
+                        )
+                        st.stop()
 
-        with st.sidebar.expander("2. Run pipeline", expanded=False):
+                progress_bar.progress(10, text=format_running_message(selected_project, routes))
+                progress_text.caption(format_running_message(selected_project, routes))
+                completed_steps = {"count": 0}
+                total_steps = max(1, len(routes) * 9)
+
+                def progress_callback(stage, message):
+                    completed_steps["count"] += 1
+                    value = pipeline_progress_value(completed_steps["count"], total_steps)
+                    progress_bar.progress(value, text=message)
+                    progress_text.caption(message)
+
+                results = run_project_routes(
+                    selected_project,
+                    routes,
+                    load_config(),
+                    base_dir=DATA_PROJECTS_DIR,
+                    progress_callback=progress_callback,
+                )
+                progress_bar.progress(100, text=pipeline_status_text("finished"))
+                for result in results:
+                    st.success(format_run_result(result))
+                if results:
+                    st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
+            except Exception as exc:
+                st.exception(exc)
+            finally:
+                st.session_state["pipeline_running"] = False
+                st.session_state.pop("pending_pipeline_run", None)
+                if lock_acquired:
+                    release_project_run_lock(selected_project)
+        elif pending_run:
+            st.warning(pipeline_status_text("other_project"))
+            st.stop()
+
+        lock_status = project_run_lock_status(selected_project)
+        project_is_running = st.session_state.get("pipeline_running", False) or lock_status["locked"]
+        if lock_status["locked"] and not st.session_state.get("pipeline_running", False):
+            st.sidebar.warning(pipeline_status_text("stale_lock"))
+            if st.sidebar.button(pipeline_status_text("reset_lock_button")):
+                release_project_run_lock(selected_project)
+                st.rerun()
+
+        with st.sidebar.expander("1. Upload files", expanded=False):
+            if not should_render_upload_widgets(project_is_running):
+                st.info(pipeline_status_text("upload_disabled"))
+            else:
+                if latest_run:
+                    st.caption(f"Latest run: {latest_run}")
+                route_mode = st.selectbox(
+                    "Upload route mode",
+                    ["route_1", "route_2", "both"],
+                    format_func=route_label,
+                    key="upload_route_mode",
+                )
+                for route_name in routes_for_ui_mode(route_mode):
+                    route_display = route_label(route_name)
+                    st.markdown(f"**{route_display}**")
+                    manifest = load_upload_manifest(selected_project, route_name)
+                    if manifest:
+                        st.caption(
+                            "Last upload: "
+                            f"KIR `{manifest.get('kir_original_name', 'n/a')}`, "
+                            f"Poteri `{manifest.get('poteri_original_name', 'n/a')}`, "
+                            f"{manifest.get('saved_at', 'n/a')}"
+                        )
+                    kir_file = st.file_uploader(
+                        f"KIR file for {route_display}",
+                        type=allowed_upload_extensions(),
+                        key=f"{route_name}_kir_upload",
+                    )
+                    poteri_file = st.file_uploader(
+                        f"Poteri file for {route_display}",
+                        type=allowed_upload_extensions(),
+                        key=f"{route_name}_poteri_upload",
+                    )
+                    if st.button(
+                        "Save uploaded files",
+                        disabled=not (kir_file and poteri_file),
+                        key=f"save_{route_name}",
+                    ):
+                        try:
+                            result = save_uploaded_route_files(
+                                selected_project,
+                                route_name,
+                                kir_file,
+                                poteri_file,
+                                base_dir=DATA_PROJECTS_DIR,
+                            )
+                            st.success(f"Saved uploads for {route_display}")
+                            st.caption(f"KIR: {result['kir_path']}")
+                            st.caption(f"Poteri: {result['poteri_path']}")
+                            st.caption(f"Manifest: {result['manifest_path']}")
+                        except Exception as exc:
+                            st.error(str(exc))
+
+        with st.sidebar.expander("2. Run pipeline", expanded=project_is_running):
+            if project_is_running:
+                st.info(pipeline_status_text("already_running"))
             for label, routes in [
                 (f"Run {route_label('route_1')}", ["route_1"]),
                 (f"Run {route_label('route_2')}", ["route_2"]),
@@ -1041,76 +1137,6 @@ def main():
                     on_click=queue_pipeline_run,
                     args=(selected_project, routes),
                 )
-
-            pending_run = st.session_state.get("pending_pipeline_run")
-            if pending_run and pending_run["project"] == selected_project:
-                routes = pending_run["routes"]
-                lock_acquired = False
-                try:
-                    if not acquire_project_run_lock(selected_project):
-                        st.warning(pipeline_status_text("already_running"))
-                        st.session_state["pipeline_running"] = False
-                        st.session_state.pop("pending_pipeline_run", None)
-                        st.stop()
-                    lock_acquired = True
-                    st.warning(pipeline_status_text("active"))
-                    stop_col, _ = st.columns([1, 2])
-                    stop_col.button(
-                        pipeline_status_text("stop_button"),
-                        disabled=True,
-                        help=pipeline_status_text("stop_help"),
-                    )
-                    for route_name in routes:
-                        kir_file = st.session_state.get(f"{route_name}_kir_upload")
-                        poteri_file = st.session_state.get(f"{route_name}_poteri_upload")
-                        if kir_file and poteri_file:
-                            save_uploaded_route_files(
-                                selected_project,
-                                route_name,
-                                kir_file,
-                                poteri_file,
-                                base_dir=DATA_PROJECTS_DIR,
-                            )
-                        if not project_route_uploads_exist(selected_project, route_name):
-                            st.error(
-                                f"Upload KIR and Poteri files for {route_label(route_name)} first, "
-                                "or click Save uploaded files."
-                            )
-                            st.stop()
-                    progress_bar = top_progress_bar or st.sidebar.progress(0, text=format_running_message(selected_project, routes))
-                    progress_text = top_progress_text or st.sidebar.empty()
-                    progress_bar.progress(0, text=format_running_message(selected_project, routes))
-                    completed_steps = {"count": 0}
-                    total_steps = max(1, len(routes) * 9)
-
-                    def progress_callback(stage, message):
-                        completed_steps["count"] += 1
-                        value = min(100, int(completed_steps["count"] / total_steps * 100))
-                        progress_bar.progress(value, text=message)
-                        progress_text.caption(message)
-
-                    results = run_project_routes(
-                        selected_project,
-                        routes,
-                        load_config(),
-                        base_dir=DATA_PROJECTS_DIR,
-                        progress_callback=progress_callback,
-                    )
-                    progress_bar.progress(100, text="Pipeline finished.")
-                    for result in results:
-                        st.success(format_run_result(result))
-                    if results:
-                        st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
-                except Exception as exc:
-                    st.exception(exc)
-                finally:
-                    st.session_state["pipeline_running"] = False
-                    st.session_state.pop("pending_pipeline_run", None)
-                    if lock_acquired:
-                        release_project_run_lock(selected_project)
-            elif pending_run:
-                st.warning(pipeline_status_text("other_project"))
-                st.stop()
 
         with st.sidebar.expander("3. Open dashboard", expanded=True):
             st.caption(pipeline_status_text("open_dashboard_caption"))

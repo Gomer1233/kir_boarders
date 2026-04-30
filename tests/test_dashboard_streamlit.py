@@ -14,6 +14,7 @@ from dashboard_streamlit import (
     FILTER_COLUMNS,
     format_run_result,
     format_running_message,
+    pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
     GROUP_COLUMNS,
@@ -40,6 +41,7 @@ from dashboard_streamlit import (
     project_route_uploads_exist,
     project_run_lock_status,
     routes_for_ui_mode,
+    should_render_upload_widgets,
     sort_metric_columns,
     project_select_options,
     read_file_for_download,
@@ -366,6 +368,21 @@ def test_pipeline_status_text_returns_readable_russian_copy():
     assert pipeline_status_text("active").startswith("Прогон выполняется")
     assert "завершения" in pipeline_status_text("already_running")
     assert "другого проекта" in pipeline_status_text("other_project")
+    assert "lock-файл" in pipeline_status_text("stale_lock")
+    for key in ["active", "already_running", "other_project", "stale_lock"]:
+        assert "Ð" not in pipeline_status_text(key)
+        assert "???" not in pipeline_status_text(key)
+
+
+def test_pipeline_progress_value_starts_visible_and_never_reaches_finished_state():
+    assert pipeline_progress_value(0, 18) == 10
+    assert pipeline_progress_value(1, 18) > 10
+    assert pipeline_progress_value(18, 18) == 99
+
+
+def test_should_render_upload_widgets_only_when_project_is_not_running():
+    assert should_render_upload_widgets(False) is True
+    assert should_render_upload_widgets(True) is False
 
 
 def test_download_file_name_includes_run_context():
