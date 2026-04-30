@@ -38,6 +38,11 @@ FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_s
 GROUP_COLUMNS = [TS_COL, CATEGORY_COL, FACTORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
 PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
+RELATIONSHIP_HEADING_COLORS = {
+    WRITEOFFS_COL: {"accent": "#fb923c", "background": "rgba(251, 146, 60, 0.18)"},
+    REVENUE_COL: {"accent": "#4ade80", "background": "rgba(74, 222, 128, 0.16)"},
+    FREE_STOCK_COL: {"accent": "#60a5fa", "background": "rgba(96, 165, 250, 0.18)"},
+}
 DASHBOARD_SCREENS = [
     "Overview",
     "Metric analysis",
@@ -605,6 +610,27 @@ def relationship_chart_rows(network_names, relationship_columns):
     return [{"comparison": column, "networks": list(network_names)} for column in relationship_columns]
 
 
+def relationship_heading_html(metric, comparison):
+    colors = RELATIONSHIP_HEADING_COLORS.get(
+        comparison,
+        {"accent": "#93c5fd", "background": "rgba(147, 197, 253, 0.16)"},
+    )
+    return (
+        '<div class="relationship-heading" '
+        'style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
+        'margin:22px 0 12px 0;font-size:1.35rem;font-weight:800;line-height:1.25;">'
+        f'<span class="metric-badge" style="color:#f8fafc;">{escape(str(metric))}</span>'
+        '<span style="font-size:0.78rem;letter-spacing:0.12em;color:#94a3b8;'
+        'border:1px solid rgba(148,163,184,0.45);border-radius:999px;'
+        'padding:3px 9px;">VS</span>'
+        f'<span class="comparison-badge" style="color:{colors["accent"]};'
+        f'background:{colors["background"]};border:1px solid {colors["accent"]};'
+        'border-radius:999px;padding:5px 12px;">'
+        f'{escape(str(comparison))}</span>'
+        '</div>'
+    )
+
+
 def _frange(start, stop, step):
     values = []
     value = start
@@ -892,7 +918,7 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
     network_by_name = {name: df for name, df in networks}
     for row in relationship_chart_rows(network_names, available):
         column = row["comparison"]
-        st.markdown(f"### {metric} vs {column}")
+        st.markdown(relationship_heading_html(metric, column), unsafe_allow_html=True)
         chart_columns = st.columns(len(row["networks"]))
         for container, network_name in zip(chart_columns, row["networks"]):
             network_df = network_by_name[network_name]

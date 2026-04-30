@@ -603,6 +603,7 @@ from dashboard_streamlit import (
     first_bins_store_sum,
     first_bins_summary,
     relationship_chart_rows,
+    relationship_heading_html,
     percentile_store_counts,
     split_by_network,
 )
@@ -674,6 +675,19 @@ def test_relationship_chart_rows_group_networks_side_by_side_per_comparison_metr
         {"comparison": WRITEOFFS, "networks": ["TC Perekrestok", "TC Pyaterochka"]},
         {"comparison": REVENUE, "networks": ["TC Perekrestok", "TC Pyaterochka"]},
     ]
+
+
+def test_relationship_heading_html_makes_vs_and_comparison_metric_visually_explicit():
+    html = relationship_heading_html("KIR <950>", REVENUE)
+
+    assert "VS" in html
+    assert "relationship-heading" in html
+    assert "comparison-badge" in html
+    assert "metric-badge" in html
+    assert "background:" in html
+    assert REVENUE in html
+    assert "KIR &lt;950&gt;" in html
+    assert "KIR <950>" not in html
 
 
 
