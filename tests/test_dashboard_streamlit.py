@@ -24,6 +24,7 @@ from dashboard_streamlit import (
     calculate_relationship_stats,
     collapse_tail_bins,
     filter_zero_metric_values,
+    filter_label,
     format_percentile_card,
     render_percentile_card_html,
     get_numeric_metric_columns,
@@ -112,9 +113,11 @@ def test_metric_analysis_context_describes_store_and_category_route_with_selecte
     context = metric_analysis_context(
         df,
         {"\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["Молоко", "Хлеб"], TS_COL: ["ТС Пятерочка"]},
+        metric="КИР-950",
     )
 
     assert context == {
+        "metric": "КИР-950",
         "scope": "Магазины и Категории",
         "categories": "Молоко, Хлеб",
         "networks": "ТС Пятерочка",
@@ -131,6 +134,7 @@ def test_metric_analysis_context_summarizes_all_categories_without_overloading_u
 
     context = metric_analysis_context(df, {})
 
+    assert context["metric"] is None
     assert context["scope"] == "Магазины и Категории"
     assert context["categories"] == "Все категории (3)"
     assert context["networks"] == "A, B"
@@ -141,18 +145,22 @@ def test_metric_analysis_context_describes_store_only_route():
 
     context = metric_analysis_context(df, {})
 
-    assert context == {"scope": "Магазины", "categories": None, "networks": "A, B"}
+    assert context == {"metric": None, "scope": "Магазины", "categories": None, "networks": "A, B"}
 
 
 def test_render_metric_analysis_context_html_is_compact_and_escapes_values():
     html = render_metric_analysis_context_html(
-        {"scope": "Магазины и Категории", "categories": "A <B>", "networks": "ТС Пятерочка"}
+        {"metric": "КИР <950>", "scope": "Магазины и Категории", "categories": "A <B>", "networks": "ТС Пятерочка"}
     )
 
     assert "Что анализируем" in html
+    assert "Метрика" in html
+    assert "КИР &lt;950&gt;" in html
     assert "Магазины и Категории" in html
     assert "A &lt;B&gt;" in html
     assert "A <B>" not in html
+    assert "Сеть" in html
+    assert "ТС ТС Пятерочка" not in html
     assert "analysis-context" in html
 
 
@@ -390,9 +398,15 @@ from dashboard_streamlit import format_week_label
 
 
 def test_format_week_label_handles_excel_float_week():
-    assert format_week_label(202607.0) == "07.2026"
-    assert format_week_label("202608.0") == "08.2026"
-    assert format_week_label("2026.09") == "09.2026"
+    assert format_week_label(202607.0) == "Y2026 W07"
+    assert format_week_label("202608.0") == "Y2026 W08"
+    assert format_week_label("2026.09") == "Y2026 W09"
+    assert format_week_label("2026/3") == "Y2026 W03"
+
+
+def test_filter_label_renames_week_year_for_business_users():
+    assert filter_label("\u041d\u0435\u0434\u0435\u043b\u044f\u0413\u043e\u0434") == "Год и Неделя"
+    assert filter_label(TS_COL) == TS_COL
 
 
 from dashboard_streamlit import run_file_paths

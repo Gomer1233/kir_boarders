@@ -306,11 +306,11 @@ def format_week_label(value):
 
     compact_match = re.fullmatch(r"(\d{4})(\d{2})", text)
     if compact_match:
-        return f"{compact_match.group(2)}.{compact_match.group(1)}"
+        return f"Y{compact_match.group(1)} W{int(compact_match.group(2)):02d}"
 
     dotted_match = re.fullmatch(r"(\d{4})[./-](\d{1,2})", text)
     if dotted_match:
-        return f"{int(dotted_match.group(2)):02d}.{dotted_match.group(1)}"
+        return f"Y{dotted_match.group(1)} W{int(dotted_match.group(2)):02d}"
 
     return str(value)
 
@@ -360,6 +360,12 @@ def filter_options_for_column(df, column):
     return df[column].dropna().unique().tolist()
 
 
+def filter_label(column):
+    if column == WEEK_COL:
+        return "\u0413\u043e\u0434 \u0438 \u041d\u0435\u0434\u0435\u043b\u044f"
+    return str(column)
+
+
 def apply_filter_values(df, filter_values):
     filtered = df.copy()
     for column, selected in filter_values.items():
@@ -378,10 +384,11 @@ def _compact_context_values(values, max_items=4):
     return f"{visible} +{len(clean_values) - max_items}"
 
 
-def metric_analysis_context(filtered, filter_values):
+def metric_analysis_context(filtered, filter_values, metric=None):
     filter_values = filter_values or {}
     has_category = CATEGORY_COL in filtered.columns
     context = {
+        "metric": metric,
         "scope": "\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b \u0438 \u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438" if has_category else "\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b",
         "categories": None,
         "networks": None,
@@ -401,21 +408,30 @@ def metric_analysis_context(filtered, filter_values):
 
 
 def render_metric_analysis_context_html(context):
-    chips = [
-        ("\u0420\u0430\u0437\u0440\u0435\u0437", context.get("scope")),
-    ]
+    chips = []
+    if context.get("metric"):
+        chips.append(("\u041c\u0435\u0442\u0440\u0438\u043a\u0430", context["metric"]))
+    chips.append(("\u0420\u0430\u0437\u0440\u0435\u0437", context.get("scope")))
     if context.get("categories"):
         chips.append(("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438", context["categories"]))
     if context.get("networks"):
-        chips.append(("\u0422\u0421", context["networks"]))
-    chip_html = "".join(
-        '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;'
-        'border:1px solid rgba(148,163,184,0.28);border-radius:999px;background:rgba(15,23,42,0.35);">'
-        f'<span style="color:#94a3b8;font-size:0.76rem;font-weight:760;text-transform:uppercase;letter-spacing:0.06em;">{escape(str(label))}</span>'
-        f'<span style="color:#f8fafc;font-size:0.88rem;font-weight:760;">{escape(str(value))}</span>'
-        '</span>'
-        for label, value in chips
-    )
+        chips.append(("\u0421\u0435\u0442\u044c", context["networks"]))
+    chip_html_parts = []
+    for label, value in chips:
+        label_text = escape(str(label))
+        value_text = escape(str(value))
+        value_style = "color:#f8fafc;font-size:0.88rem;font-weight:760;"
+        if label == "\u041c\u0435\u0442\u0440\u0438\u043a\u0430":
+            value_style += "display:inline-block;max-width:min(560px,72vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;"
+        chip_html_parts.append(
+            '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;'
+            'border:1px solid rgba(148,163,184,0.28);border-radius:999px;background:rgba(15,23,42,0.35);"'
+            f' title="{value_text}">'
+            f'<span style="color:#94a3b8;font-size:0.76rem;font-weight:760;text-transform:uppercase;letter-spacing:0.06em;">{label_text}</span>'
+            f'<span style="{value_style}">{value_text}</span>'
+            '</span>'
+        )
+    chip_html = "".join(chip_html_parts)
     return (
         '<div class="analysis-context" style="margin:18px 0 14px 0;padding:13px 15px;'
         'border:1px solid rgba(148,163,184,0.22);border-left:4px solid #60a5fa;'
@@ -807,7 +823,7 @@ def _apply_sidebar_filters(df):
             continue
         options = sorted(filtered[column].dropna().unique().tolist())
         format_func = format_week_label if column == WEEK_COL else str
-        selected = st.sidebar.multiselect(column, options, format_func=format_func)
+        selected = st.sidebar.multiselect(filter_label(column), options, format_func=format_func)
         if selected:
             filtered = filtered[filtered[column].isin(selected)]
     return filtered
@@ -935,7 +951,7 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
             chart_bin_table = collapse_tail_bins(bin_table, head_bins)
             st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
-    st.markdown(render_metric_analysis_context_html(metric_analysis_context(filtered, filter_values or {})), unsafe_allow_html=True)
+    st.markdown(render_metric_analysis_context_html(metric_analysis_context(filtered, filter_values or {}, metric=metric)), unsafe_allow_html=True)
     pc1, pc2, pc3 = st.columns(3)
     metric_unit = metric_unit_for_metric(metric)
     for container, card, color in zip(
@@ -1367,7 +1383,7 @@ def main():
                 current_selection = [value for value in current_filters.get(column, []) if value in options]
                 format_func = format_week_label if column == WEEK_COL else str
                 selected_filters[column] = st.multiselect(
-                    column,
+                    filter_label(column),
                     options,
                     default=current_selection,
                     format_func=format_func,
