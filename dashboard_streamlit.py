@@ -454,7 +454,7 @@ def render_percentile_card_html(card, color):
     threshold_label = escape(str(card["threshold_label"]))
     threshold_value = escape(str(card["threshold_value"]))
     threshold_unit = escape(str(card.get("threshold_unit", "")))
-    threshold_help = escape(str(card.get("threshold_help", "")), quote=True)
+    threshold_help = escape(str(card.get("threshold_help", "")))
     threshold_display = f"{threshold_value} {threshold_unit}".strip()
     color = escape(str(color))
     return f"""
@@ -471,13 +471,10 @@ def render_percentile_card_html(card, color):
         <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">{count}</div>
         <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
             {threshold_label}
-            <span class="info-icon" title="{threshold_help}" style="
-                display:inline-flex;align-items:center;justify-content:center;
-                width:15px;height:15px;margin:0 5px;border-radius:50%;
-                border:1px solid rgba(255,255,255,0.38);color:rgba(255,255,255,0.78);
-                font-size:0.68rem;font-weight:800;cursor:help;
-            ">i</span>
             <span style="color:{color};font-weight:850;">{threshold_display}</span>
+        </div>
+        <div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">
+            {threshold_help}
         </div>
     </div>
     """

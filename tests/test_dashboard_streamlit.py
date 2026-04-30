@@ -226,8 +226,9 @@ def test_render_percentile_card_html_includes_soft_percentile_color():
     assert "21,140" in html
     assert "Порог метрики" in html
     assert "Threshold" not in html
-    assert "info-icon" in html
-    assert 'title="Это значение КИР, выше или равно которому находится 21,140 магазинов."' in html
+    assert "info-icon" not in html
+    assert 'title="' not in html
+    assert "Это значение КИР, выше или равно которому находится 21,140 магазинов." in html
     assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33 руб</span>' in html
     assert "#ff4d4d" in html
 
