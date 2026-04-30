@@ -78,6 +78,20 @@ def list_project_run_dirs(project_name, projects_dir=DATA_PROJECTS_DIR):
     )
 
 
+def list_legacy_run_dirs(data_dir=DATA_DIR):
+    data_path = Path(data_dir)
+    if not data_path.exists():
+        return []
+    return sorted(
+        [
+            path
+            for path in data_path.iterdir()
+            if path.is_dir() and path.name.startswith("run_") and (path / "final_clean_data.xlsx").exists()
+        ],
+        reverse=True,
+    )
+
+
 def latest_project_run_name(project_name, projects_dir=DATA_PROJECTS_DIR):
     runs = list_project_run_dirs(project_name, projects_dir=projects_dir)
     if not runs:
@@ -1544,6 +1558,19 @@ def main():
                 )
                 if st.button("Open dashboard", disabled=project_is_running):
                     st.session_state["opened_run_dir"] = str(selected_run)
+
+    legacy_run_dirs = list_legacy_run_dirs()
+    if legacy_run_dirs:
+        with st.sidebar.expander("Open CLI run (data/run_*)", expanded=False):
+            st.caption("Use this only for runs created by python main.py outside the project UI.")
+            selected_legacy_run = st.selectbox(
+                "CLI run",
+                legacy_run_dirs,
+                format_func=dashboard_run_label,
+                disabled=is_running,
+            )
+            if st.button("Open CLI dashboard", disabled=is_running):
+                st.session_state["opened_run_dir"] = str(selected_legacy_run)
 
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:

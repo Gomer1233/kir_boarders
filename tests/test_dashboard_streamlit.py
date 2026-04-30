@@ -36,6 +36,7 @@ from dashboard_streamlit import (
     filter_options_for_column,
     group_comparison_tables,
     route_label,
+    list_legacy_run_dirs,
     list_project_run_dirs,
     latest_project_run_name,
     load_upload_manifest,
@@ -534,6 +535,19 @@ def test_list_project_run_dirs_returns_project_runs(tmp_path):
     assert [run.name for run in runs] == ["run_002_route_2", "run_001_route_1"]
 
 
+def test_list_legacy_run_dirs_returns_ready_data_runs(tmp_path):
+    (tmp_path / "run_001_route_1").mkdir()
+    (tmp_path / "run_001_route_1" / "final_clean_data.xlsx").write_text("x")
+    (tmp_path / "run_002_route_2").mkdir()
+    (tmp_path / "run_002_route_2" / "final_clean_data.xlsx").write_text("x")
+    (tmp_path / "run_003_route_1").mkdir()
+    (tmp_path / "projects" / "003" / "runs" / "run_004_route_1").mkdir(parents=True)
+
+    runs = list_legacy_run_dirs(data_dir=tmp_path)
+
+    assert [run.name for run in runs] == ["run_002_route_2", "run_001_route_1"]
+
+
 def test_data_projects_dir_points_under_data():
     assert DATA_PROJECTS_DIR.name == "projects"
     assert DATA_PROJECTS_DIR.parent.name == "data"
@@ -873,6 +887,14 @@ def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
     assert "with st.expander(chart_settings_summary(" not in source
     assert source.index("metric-chart-settings-spacer") < expander_index
     assert source.index("st.caption(chart_settings_summary(") > expander_index
+
+
+def test_dashboard_exposes_cli_runs_even_without_project_selection():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+
+    assert "list_legacy_run_dirs()" in source
+    assert "Open CLI run (data/run_*)" in source
+    assert source.index("legacy_run_dirs = list_legacy_run_dirs()") < source.index("opened_run_dir = st.session_state.get")
 
 
 from dashboard_streamlit import (
