@@ -143,6 +143,19 @@ def list_run_dirs():
     return list_legacy_run_dirs(DATA_DIR)
 
 
+def dashboard_source_options(projects, legacy_runs):
+    options = []
+    if projects:
+        options.append("Project runs")
+    if legacy_runs:
+        options.append("Legacy runs")
+    return options
+
+
+def allowed_upload_extensions():
+    return ["xlsx"]
+
+
 def project_select_options(projects):
     return sorted(projects)
 
@@ -960,13 +973,13 @@ def main():
                     )
                 kir_file = st.file_uploader(
                     f"KIR file for {route_display}",
-                    type=["xlsx", "xls"],
+                    type=allowed_upload_extensions(),
                     key=f"{route_name}_kir_upload",
                     disabled=project_is_running,
                 )
                 poteri_file = st.file_uploader(
                     f"Poteri file for {route_display}",
-                    type=["xlsx", "xls"],
+                    type=allowed_upload_extensions(),
                     key=f"{route_name}_poteri_upload",
                     disabled=project_is_running,
                 )
@@ -1087,6 +1100,21 @@ def main():
                 )
                 if st.button("Open dashboard", disabled=project_is_running):
                     st.session_state["opened_run_dir"] = str(selected_run)
+
+    legacy_run_dirs = list_legacy_run_dirs()
+    available_dashboard_sources = dashboard_source_options(current_projects, legacy_run_dirs)
+    if "Legacy runs" in available_dashboard_sources:
+        st.sidebar.divider()
+        with st.sidebar.expander("Open legacy CLI run", expanded=False):
+            st.caption("Use this for existing data/run_* folders produced by python main.py.")
+            selected_legacy_run = st.selectbox(
+                "Legacy run",
+                legacy_run_dirs,
+                format_func=dashboard_run_label,
+                disabled=is_running,
+            )
+            if st.button("Open legacy dashboard", disabled=is_running):
+                st.session_state["opened_run_dir"] = str(selected_legacy_run)
 
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:

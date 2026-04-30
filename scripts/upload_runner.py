@@ -13,6 +13,7 @@ from scripts.quality_flags import add_quality_flags
 KIR_SOURCE_NAME = "kir_source.xlsx"
 POTERI_SOURCE_NAME = "poteri_source.xlsx"
 UPLOAD_MANIFEST_NAME = "upload_manifest.json"
+SUPPORTED_UPLOAD_SUFFIXES = {".xlsx"}
 
 
 def _utc_now():
@@ -25,6 +26,13 @@ def _upload_bytes(uploaded_file):
     if hasattr(uploaded_file, "read"):
         return uploaded_file.read()
     raise TypeError("Uploaded file must provide getbuffer() or read().")
+
+
+def _require_supported_upload(uploaded_file, label):
+    name = getattr(uploaded_file, "name", "")
+    suffix = Path(name).suffix.lower()
+    if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
+        raise ValueError(f"Only .xlsx uploads are supported for {label}: {name}")
 
 
 def _validate_route(route_name):
@@ -55,6 +63,8 @@ def save_uploaded_route_files(project_name, route_name, kir_file, poteri_file, b
     project_path = project_dir(name, base_dir=base_dir)
     if not project_path.exists():
         raise FileNotFoundError(f"Project does not exist: {name}")
+    _require_supported_upload(kir_file, "KIR")
+    _require_supported_upload(poteri_file, "Poteri")
 
     upload_dir = _project_upload_route_dir(name, route_name, base_dir=base_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)

@@ -64,6 +64,19 @@ def test_save_uploaded_route_files_rejects_unknown_route(tmp_path):
         )
 
 
+def test_save_uploaded_route_files_rejects_xls_uploads(tmp_path):
+    create_project("003", base_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="Only .xlsx uploads are supported"):
+        save_uploaded_route_files(
+            "003",
+            "route_1",
+            FakeUpload("kir.xls", b"kir"),
+            FakeUpload("poteri.xlsx", b"poteri"),
+            base_dir=tmp_path,
+        )
+
+
 def test_build_project_route_config_points_to_project_uploads(tmp_path):
     config = {
         "inputs": {"route_1": "data/route_1", "route_2": "data/route_2"},

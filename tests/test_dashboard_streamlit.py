@@ -5,6 +5,8 @@ import pandas as pd
 from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
     acquire_project_run_lock,
+    allowed_upload_extensions,
+    dashboard_source_options,
     download_file_name,
     FACTORY_COL,
     FILTER_COLUMNS,
@@ -238,6 +240,22 @@ def test_list_legacy_run_dirs_returns_data_run_directories(tmp_path):
     runs = list_legacy_run_dirs(data_dir=tmp_path)
 
     assert [run.name for run in runs] == ["run_2_route_2", "run_1_route_1"]
+
+
+def test_dashboard_source_options_include_legacy_without_projects(tmp_path):
+    legacy_runs = [tmp_path / "run_1"]
+
+    assert dashboard_source_options([], legacy_runs) == ["Legacy runs"]
+
+
+def test_dashboard_source_options_include_project_and_legacy_sources(tmp_path):
+    legacy_runs = [tmp_path / "run_1"]
+
+    assert dashboard_source_options(["950"], legacy_runs) == ["Project runs", "Legacy runs"]
+
+
+def test_allowed_upload_extensions_only_accepts_xlsx():
+    assert allowed_upload_extensions() == ["xlsx"]
 
 
 def test_list_project_run_dirs_returns_project_runs(tmp_path):
