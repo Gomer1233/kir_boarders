@@ -6,6 +6,7 @@ from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
     acquire_project_run_lock,
     allowed_upload_extensions,
+    apply_filter_values,
     dataframe_cache_key,
     dashboard_source_options,
     download_file_name,
@@ -24,6 +25,7 @@ from dashboard_streamlit import (
     format_percentile_card,
     render_percentile_card_html,
     get_numeric_metric_columns,
+    filter_options_for_column,
     route_label,
     list_legacy_run_dirs,
     list_project_run_dirs,
@@ -102,6 +104,22 @@ def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
     assert filtered_metric.tolist()[:1] == [1.0]
     assert pd.isna(filtered_metric.iloc[1])
     assert pd.isna(filtered_metric.iloc[2])
+
+
+def test_filter_options_for_column_formats_weeks_and_omits_nulls():
+    df = pd.DataFrame({"week": [202607.0, None, "202608.0"]})
+
+    options = filter_options_for_column(df, "week")
+
+    assert options == [202607.0, "202608.0"]
+
+
+def test_apply_filter_values_filters_only_selected_columns():
+    df = pd.DataFrame({"week": [1, 1, 2], "ts": ["A", "B", "A"], "value": [10, 20, 30]})
+
+    filtered = apply_filter_values(df, {"week": [1], "ts": []})
+
+    assert filtered["value"].tolist() == [10, 20]
 
 
 def test_format_percentile_card_separates_count_from_threshold():

@@ -339,6 +339,20 @@ def filter_zero_metric_values(df, numeric_metric):
     return df.loc[mask].copy(), numeric.loc[mask]
 
 
+def filter_options_for_column(df, column):
+    if column not in df.columns:
+        return []
+    return df[column].dropna().unique().tolist()
+
+
+def apply_filter_values(df, filter_values):
+    filtered = df.copy()
+    for column, selected in filter_values.items():
+        if column in filtered.columns and selected:
+            filtered = filtered[filtered[column].isin(selected)]
+    return filtered
+
+
 def format_percentile_card(label, item):
     return {
         "label": label,
@@ -1117,7 +1131,7 @@ def main():
     available_dashboard_sources = dashboard_source_options(current_projects, legacy_run_dirs)
     if "Legacy runs" in available_dashboard_sources:
         st.sidebar.divider()
-        with st.sidebar.expander("Open legacy CLI run", expanded=False):
+        with st.sidebar.expander("Advanced: old CLI runs", expanded=False):
             st.caption("Use this for existing data/run_* folders produced by python main.py.")
             selected_legacy_run = st.selectbox(
                 "Legacy run",
@@ -1148,8 +1162,42 @@ def main():
         st.error("No numeric metric columns found.")
         return
 
-    metric = st.sidebar.selectbox("Metric", metrics)
-    filtered = _apply_sidebar_filters(df)
+    settings = st.session_state.get("dashboard_settings")
+    if not settings or settings.get("run_dir") != str(run_dir):
+        settings = {"run_dir": str(run_dir), "metric": metrics[0], "filters": {}}
+        st.session_state["dashboard_settings"] = settings
+
+    with st.sidebar.expander("4. Dashboard settings", expanded=True):
+        st.caption("Choose metric and filters, then apply. This avoids rebuilding charts on every click.")
+        with st.form("dashboard_settings_form"):
+            current_metric = settings.get("metric", metrics[0])
+            if current_metric not in metrics:
+                current_metric = metrics[0]
+            selected_metric = st.selectbox("Metric", metrics, index=metrics.index(current_metric))
+
+            selected_filters = {}
+            current_filters = settings.get("filters", {})
+            for column in FILTER_COLUMNS:
+                if column not in df.columns:
+                    continue
+                options = filter_options_for_column(df, column)
+                current_selection = [value for value in current_filters.get(column, []) if value in options]
+                format_func = format_week_label if column == WEEK_COL else str
+                selected_filters[column] = st.multiselect(
+                    column,
+                    options,
+                    default=current_selection,
+                    format_func=format_func,
+                )
+
+            if st.form_submit_button("Apply settings"):
+                settings = {"run_dir": str(run_dir), "metric": selected_metric, "filters": selected_filters}
+                st.session_state["dashboard_settings"] = settings
+
+    metric = settings.get("metric", metrics[0])
+    if metric not in metrics:
+        metric = metrics[0]
+    filtered = apply_filter_values(df, settings.get("filters", {}))
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
     screen = st.radio("Dashboard screen", DASHBOARD_SCREENS, horizontal=True)
