@@ -34,6 +34,7 @@ from dashboard_streamlit import (
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
+    network_brand_html,
     network_chart_color,
     normalize_new_project_input,
     project_route_uploads_exist,
@@ -149,6 +150,30 @@ def test_network_chart_color_uses_soft_brand_colors():
     assert network_chart_color("ТС Пятерочка") == "#f06a6a"
     assert network_chart_color("ТС Перекресток") == "#64b878"
     assert network_chart_color("Unknown") == "#79bff2"
+
+
+def test_network_brand_html_renders_pyaterochka_brand_badge():
+    html = network_brand_html("ТС Пятерочка")
+
+    assert "brand-pyaterochka" in html
+    assert "Пятёрочка" in html
+    assert ">5<" in html
+    assert "#e52320" in html
+
+
+def test_network_brand_html_renders_perekrestok_brand_badge():
+    html = network_brand_html("ТС Перекресток")
+
+    assert "brand-perekrestok" in html
+    assert "Перекрёсток" in html
+    assert "#00843d" in html
+
+
+def test_network_brand_html_escapes_unknown_network_name():
+    html = network_brand_html("Unknown <network>")
+
+    assert "Unknown &lt;network&gt;" in html
+    assert "Unknown <network>" not in html
 
 
 def test_collapse_tail_bins_keeps_head_and_sums_remaining_bins():

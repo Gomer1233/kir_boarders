@@ -411,6 +411,45 @@ def network_chart_color(network_name):
     return "#79bff2"
 
 
+def network_brand_html(network_name):
+    name = str(network_name).lower()
+    if "\u043f\u044f\u0442\u0435\u0440" in name or "pyater" in name:
+        return """
+        <div class="network-brand brand-pyaterochka" style="
+            display:inline-flex;align-items:center;gap:12px;margin:4px 0 10px 0;
+            padding:8px 14px 8px 8px;border-radius:16px;
+            background:linear-gradient(135deg, rgba(229,35,32,0.18), rgba(229,35,32,0.05));
+            border:1px solid rgba(229,35,32,0.5);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+        ">
+            <span style="
+                display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;
+                border-radius:50%;background:#e52320;color:#ffffff;font-size:31px;font-weight:900;
+                font-family:Georgia,serif;line-height:1;box-shadow:0 0 0 4px rgba(255,255,255,0.12);
+            ">5</span>
+            <span style="color:#ff5a54;font-size:1.4rem;font-weight:900;letter-spacing:-0.03em;">Пятёрочка</span>
+        </div>
+        """
+    if "\u043f\u0435\u0440\u0435\u043a" in name or "perek" in name:
+        return """
+        <div class="network-brand brand-perekrestok" style="
+            display:inline-flex;align-items:center;gap:12px;margin:4px 0 10px 0;
+            padding:8px 16px 8px 10px;border-radius:16px;
+            background:linear-gradient(135deg, rgba(0,132,61,0.2), rgba(124,194,66,0.08));
+            border:1px solid rgba(0,132,61,0.55);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+        ">
+            <span style="
+                color:#7cc242;font-size:30px;font-weight:900;line-height:1;
+                text-shadow:12px 0 0 #00843d;
+            ">∞</span>
+            <span style="color:#36b56a;font-size:1.4rem;font-weight:900;letter-spacing:-0.04em;">Перекрёсток</span>
+        </div>
+        """
+    return (
+        '<div class="network-brand" style="margin:4px 0 10px 0;font-size:1rem;font-weight:800;color:#e2e8f0;">'
+        f"{escape(str(network_name))}</div>"
+    )
+
+
 def collapse_tail_bins(bin_table, head_bins):
     if bin_table.empty:
         return bin_table.copy()
@@ -926,7 +965,8 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
                 network_df = filter_visual_outliers(network_df, "_metric", column, quantile=outlier_percentile / 100)
             chart_df = sample_for_plot(network_df)
             with container:
-                fig = px.scatter(chart_df, x="_metric", y=column, opacity=0.38, title=network_name)
+                st.markdown(network_brand_html(network_name), unsafe_allow_html=True)
+                fig = px.scatter(chart_df, x="_metric", y=column, opacity=0.38)
                 fig.update_traces(
                     marker={
                         "color": network_chart_color(network_name),
