@@ -26,6 +26,32 @@ In the sidebar:
 
 The UI also has `Open CLI run (data/run_*)` for older runs created from the command line.
 
+## Parallel Usage
+
+You can open the same dashboard in multiple browser tabs for analysis. This is safe for viewing different projects or runs.
+
+For heavier work, use separate Streamlit ports:
+
+```powershell
+python -m streamlit run dashboard_streamlit.py --server.headless true --server.port 8501
+python -m streamlit run dashboard_streamlit.py --server.headless true --server.port 8502
+```
+
+Then open:
+
+```text
+http://localhost:8501
+http://localhost:8502
+```
+
+Recommended usage:
+
+- Use one tab/server for viewing an existing dashboard.
+- Use another tab/server for running a new project pipeline.
+- Do not run two pipelines for the same project at the same time.
+- A running pipeline can slow down dashboard filters and charts because Excel reading, pandas transforms, and Plotly rendering share the same CPU/RAM.
+- If files are large, the most stable mode is to wait for the pipeline to finish before changing heavy dashboard filters.
+
 ## Run Pipeline From Console
 
 ```powershell
@@ -66,4 +92,3 @@ Main files:
 - Week filter is shown as `Y2026 W08`.
 - Plant is not exposed as a dashboard filter because it can contain too many values.
 - Correlation tables include Pearson, Spearman, business-readable strength, and interpretation text.
-
