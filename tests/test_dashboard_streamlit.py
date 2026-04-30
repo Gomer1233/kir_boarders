@@ -346,7 +346,7 @@ def test_pipeline_status_text_returns_readable_russian_copy():
     assert "завершения" in pipeline_status_text("already_running")
     assert "другого проекта" in pipeline_status_text("other_project")
     assert "lock-файл" in pipeline_status_text("stale_lock")
-    for key in ["active", "already_running", "other_project", "stale_lock"]:
+    for key in ["active", "already_running", "other_project", "stale_lock", "open_after_both_label"]:
         assert "Ð" not in pipeline_status_text(key)
         assert "???" not in pipeline_status_text(key)
 
