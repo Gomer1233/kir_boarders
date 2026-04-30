@@ -176,6 +176,21 @@ def format_running_message(project_name, routes):
     return f"Running {route_label(route_name)} for project {project_name}..."
 
 
+def pipeline_status_text(status):
+    texts = {
+        "active": "\u041f\u0440\u043e\u0433\u043e\u043d \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f. \u041d\u0435 \u0437\u0430\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0432\u043a\u043b\u0430\u0434\u043a\u0443 \u0438 \u043d\u0435 \u043c\u0435\u043d\u044f\u0439\u0442\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0434\u043e \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f.",
+        "already_running": "\u041f\u0440\u043e\u0433\u043e\u043d \u0443\u0436\u0435 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430. \u0414\u043e\u0436\u0434\u0438\u0442\u0435\u0441\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f \u0442\u0435\u043a\u0443\u0449\u0435\u0433\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0430.",
+        "other_project": "\u041f\u0440\u043e\u0433\u043e\u043d \u0437\u0430\u043f\u0443\u0449\u0435\u043d \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u043e\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430. \u0414\u043e\u0436\u0434\u0438\u0442\u0435\u0441\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f \u0442\u0435\u043a\u0443\u0449\u0435\u0433\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0430.",
+        "stop_help": "\u0412 MVP \u043f\u0440\u043e\u0433\u043e\u043d \u043d\u0435\u043b\u044c\u0437\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0438\u0437 UI. \u0414\u043e\u0436\u0434\u0438\u0442\u0435\u0441\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f \u0438\u043b\u0438 \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435 Streamlit \u0432 \u0442\u0435\u0440\u043c\u0438\u043d\u0430\u043b\u0435.",
+        "stop_button": "\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0440\u043e\u0433\u043e\u043d",
+        "open_dashboard_caption": "\u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0434\u0430\u0448\u0431\u043e\u0440\u0434 \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e\u0441\u043b\u0435 \u0433\u043e\u0442\u043e\u0432\u043e\u0433\u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0430. \u0412\u044b\u0431\u043e\u0440 run-\u0430 \u0441\u0430\u043c \u043f\u043e \u0441\u0435\u0431\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442.",
+        "no_ready_runs": "\u0414\u043b\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 \u043f\u0440\u043e\u0433\u043e\u043d\u043e\u0432.",
+        "open_dashboard_first": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442, \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0444\u0430\u0439\u043b\u044b, \u0432\u044b\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043f\u0440\u043e\u0433\u043e\u043d \u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 Open dashboard \u0434\u043b\u044f \u0433\u043e\u0442\u043e\u0432\u043e\u0433\u043e run-\u0430.",
+        "open_current_project": "\u0412\u044b\u0431\u0440\u0430\u043d \u0434\u0440\u0443\u0433\u043e\u0439 \u043f\u0440\u043e\u0435\u043a\u0442. \u041d\u0430\u0436\u043c\u0438\u0442\u0435 Open dashboard \u0434\u043b\u044f run-\u0430 \u0442\u0435\u043a\u0443\u0449\u0435\u0433\u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0430.",
+    }
+    return texts[status]
+
+
 def format_run_result(result):
     paths = result.get("paths", {})
     final_path = paths.get("final_clean") or paths.get("final") or "unknown"
@@ -875,13 +890,17 @@ def main():
 
     st.sidebar.subheader("Project")
     if is_running:
-        st.sidebar.warning("Прогон выполняется. Не закрывайте вкладку и не меняйте настройки до завершения.")
+        st.sidebar.warning(pipeline_status_text("active"))
         st.sidebar.button(
-            "Остановить прогон",
+            pipeline_status_text("stop_button"),
             disabled=True,
-            help="В MVP прогон выполняется синхронно. Реальная остановка требует отдельного фонового процесса.",
+            help=pipeline_status_text("stop_help"),
         )
+        top_progress_bar = st.sidebar.progress(0, text="Pipeline is starting...")
+        top_progress_text = st.sidebar.empty()
     else:
+        top_progress_bar = None
+        top_progress_text = None
         if st.sidebar.button("Create new project"):
             st.session_state["show_create_project"] = True
 
@@ -990,17 +1009,17 @@ def main():
                 lock_acquired = False
                 try:
                     if not acquire_project_run_lock(selected_project):
-                        st.warning("?????? ??? ??????????? ??? ????? ???????. ????????? ?????????? ???????? ???????.")
+                        st.warning(pipeline_status_text("already_running"))
                         st.session_state["pipeline_running"] = False
                         st.session_state.pop("pending_pipeline_run", None)
                         st.stop()
                     lock_acquired = True
-                    st.warning("?????? ???????????. ????????? ???????? ????????????? ?? ??????????.")
+                    st.warning(pipeline_status_text("active"))
                     stop_col, _ = st.columns([1, 2])
                     stop_col.button(
-                        "?????????? ??????",
+                        pipeline_status_text("stop_button"),
                         disabled=True,
-                        help="? MVP ?????? ?????? ?????????? ?? UI. ????????? ?????????? ??? ?????????? Streamlit ? ?????????.",
+                        help=pipeline_status_text("stop_help"),
                     )
                     for route_name in routes:
                         kir_file = st.session_state.get(f"{route_name}_kir_upload")
@@ -1019,8 +1038,9 @@ def main():
                                 "or click Save uploaded files."
                             )
                             st.stop()
-                    progress_bar = st.progress(0, text=format_running_message(selected_project, routes))
-                    progress_text = st.empty()
+                    progress_bar = top_progress_bar or st.sidebar.progress(0, text=format_running_message(selected_project, routes))
+                    progress_text = top_progress_text or st.sidebar.empty()
+                    progress_bar.progress(0, text=format_running_message(selected_project, routes))
                     completed_steps = {"count": 0}
                     total_steps = max(1, len(routes) * 9)
 
@@ -1050,14 +1070,14 @@ def main():
                     if lock_acquired:
                         release_project_run_lock(selected_project)
             elif pending_run:
-                st.warning("?????? ??????? ??? ??????? ???????. ????????? ?????????? ???????? ???????.")
+                st.warning(pipeline_status_text("other_project"))
                 st.stop()
 
         with st.sidebar.expander("3. Open dashboard", expanded=True):
-            st.caption("Откройте дашборд только после готового прогона. Выбор run-а сам по себе данные не загружает.")
+            st.caption(pipeline_status_text("open_dashboard_caption"))
             run_dirs = list_project_run_dirs(selected_project)
             if not run_dirs:
-                st.info("Для выбранного проекта пока нет готовых прогонов.")
+                st.info(pipeline_status_text("no_ready_runs"))
             else:
                 selected_run = st.selectbox(
                     "Ready run",
@@ -1070,13 +1090,13 @@ def main():
 
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:
-        st.info("Выберите проект, загрузите файлы, выполните прогон и нажмите Open dashboard для готового run-а.")
+        st.info(pipeline_status_text("open_dashboard_first"))
         return
     run_dir = Path(opened_run_dir)
     if selected_project and DATA_PROJECTS_DIR in run_dir.parents:
         expected_project_dir = DATA_PROJECTS_DIR / selected_project
         if expected_project_dir not in run_dir.parents:
-            st.info("Выбран другой проект. Нажмите Open dashboard для run-а текущего проекта.")
+            st.info(pipeline_status_text("open_current_project"))
             return
 
     df = _load_run_dataframe(run_dir)

@@ -10,6 +10,7 @@ from dashboard_streamlit import (
     FILTER_COLUMNS,
     format_run_result,
     format_running_message,
+    pipeline_status_text,
     dashboard_run_label,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
@@ -316,6 +317,12 @@ def test_format_run_result_includes_route_run_and_output_paths(tmp_path):
 def test_format_running_message_uses_readable_routes_and_project():
     assert format_running_message("950", ["route_1"]) == "Running Route 1: Магазины и Категории for project 950..."
     assert format_running_message("950", ["route_1", "route_2"]) == "Running Both routes for project 950..."
+
+
+def test_pipeline_status_text_returns_readable_russian_copy():
+    assert pipeline_status_text("active").startswith("Прогон выполняется")
+    assert "завершения" in pipeline_status_text("already_running")
+    assert "другого проекта" in pipeline_status_text("other_project")
 
 
 def test_download_file_name_includes_run_context():
