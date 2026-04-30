@@ -6,6 +6,7 @@ from dashboard_streamlit import (
     DATA_PROJECTS_DIR,
     acquire_project_run_lock,
     allowed_upload_extensions,
+    dataframe_cache_key,
     dashboard_source_options,
     download_file_name,
     FACTORY_COL,
@@ -258,6 +259,12 @@ def test_allowed_upload_extensions_only_accepts_xlsx():
     assert allowed_upload_extensions() == ["xlsx"]
 
 
+def test_dataframe_cache_key_uses_path_and_mtime(tmp_path):
+    path = tmp_path / "final_clean_data.xlsx"
+
+    assert dataframe_cache_key(path, 123).endswith("final_clean_data.xlsx:123")
+
+
 def test_list_project_run_dirs_returns_project_runs(tmp_path):
     runs_dir = tmp_path / "003" / "runs"
     (runs_dir / "run_001_route_1").mkdir(parents=True)
@@ -472,6 +479,43 @@ def test_read_final_data_with_progress_shows_loading_steps(tmp_path):
         (100, "Dashboard data loaded."),
         ("empty", None),
     ]
+
+
+def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
+    calls = []
+
+    class FakeProgress:
+        def progress(self, value, text=None):
+            calls.append((value, text))
+
+        def empty(self):
+            calls.append(("empty", None))
+
+    def fake_read(path, mtime_ns):
+        calls.append(("read", path, mtime_ns))
+        return pd.DataFrame({"value": [1]})
+
+    path = tmp_path / "final_clean_data.xlsx"
+    path.write_text("placeholder")
+    cache = {}
+
+    first = read_final_data_with_progress(
+        path,
+        123,
+        read_func=fake_read,
+        progress_factory=lambda value, text: FakeProgress(),
+        dataframe_cache=cache,
+    )
+    second = read_final_data_with_progress(
+        path,
+        123,
+        read_func=fake_read,
+        progress_factory=lambda value, text: FakeProgress(),
+        dataframe_cache=cache,
+    )
+
+    assert first is second
+    assert [call for call in calls if call[0] == "read"] == [("read", str(path), 123)]
 
 
 from dashboard_streamlit import DASHBOARD_SCREENS, sample_for_plot

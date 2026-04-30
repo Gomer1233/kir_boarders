@@ -253,7 +253,15 @@ if st is not None:
     _read_excel_cached = st.cache_data(show_spinner=False)(_read_excel_cached)
 
 
-def read_final_data_with_progress(path, mtime_ns, read_func=None, progress_factory=None):
+def dataframe_cache_key(path, mtime_ns):
+    return f"{Path(path).resolve()}:{mtime_ns}"
+
+
+def read_final_data_with_progress(path, mtime_ns, read_func=None, progress_factory=None, dataframe_cache=None):
+    cache_key = dataframe_cache_key(path, mtime_ns)
+    if dataframe_cache is not None and cache_key in dataframe_cache:
+        return dataframe_cache[cache_key]
+
     read_func = read_func or _read_excel_cached
     progress_factory = progress_factory or st.progress
     progress_bar = progress_factory(0, text="Starting dashboard load...")
@@ -263,6 +271,9 @@ def read_final_data_with_progress(path, mtime_ns, read_func=None, progress_facto
     progress_bar.progress(90, text="Preparing dashboard data...")
     progress_bar.progress(100, text="Dashboard data loaded.")
     progress_bar.empty()
+    if dataframe_cache is not None:
+        dataframe_cache.clear()
+        dataframe_cache[cache_key] = df
     return df
 
 
@@ -630,7 +641,8 @@ def _load_run_dataframe(run_dir):
     if not final_path.exists():
         st.error(f"Missing final file: {final_path}")
         return None
-    return read_final_data_with_progress(final_path, final_path.stat().st_mtime_ns)
+    dataframe_cache = st.session_state.setdefault("loaded_dataframes", {})
+    return read_final_data_with_progress(final_path, final_path.stat().st_mtime_ns, dataframe_cache=dataframe_cache)
 
 
 def _render_quality_cards(filtered, numeric_metric):
