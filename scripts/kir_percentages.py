@@ -16,9 +16,10 @@ def percentage_column_name(kir_column, base_column):
 
 def kir_metric_columns(df):
     columns = []
+    calculated_percent_columns = set(kir_percentage_columns(df))
     for column in df.columns:
         name = str(column)
-        if not name.startswith(KIR_PREFIX) or "%" in name:
+        if not name.startswith(KIR_PREFIX) or column in calculated_percent_columns:
             continue
         if pd.api.types.is_numeric_dtype(df[column]):
             columns.append(column)
