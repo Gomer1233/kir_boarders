@@ -1,6 +1,7 @@
 from pathlib import Path
 from html import escape
 import json
+import math
 import os
 import re
 
@@ -120,13 +121,25 @@ def release_project_run_lock(project_name, projects_dir=DATA_PROJECTS_DIR):
         pass
 
 
-def make_pipeline_run_request(project_name, routes):
-    return {"project": project_name, "routes": list(routes)}
+def make_pipeline_run_request(project_name, routes, open_route=None):
+    route_list = list(routes)
+    if open_route not in route_list:
+        open_route = route_list[0] if route_list else None
+    return {"project": project_name, "routes": route_list, "open_route": open_route}
 
 
-def queue_pipeline_run(project_name, routes):
-    st.session_state["pending_pipeline_run"] = make_pipeline_run_request(project_name, routes)
+def queue_pipeline_run(project_name, routes, open_route=None):
+    st.session_state["pending_pipeline_run"] = make_pipeline_run_request(project_name, routes, open_route=open_route)
     st.session_state["pipeline_running"] = True
+
+
+def select_run_result_to_open(results, preferred_route):
+    if not results:
+        return None
+    for result in results:
+        if result.get("route") == preferred_route:
+            return result
+    return results[-1]
 
 
 def allowed_upload_extensions():
@@ -475,12 +488,16 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
     return pd.DataFrame(rows)
 
 
-def default_bin_width(series, target_bins=30, minimum=1):
+def default_bin_width(series, target_bins=30, minimum=1, maximum=1000):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return float(minimum)
     span = float(numeric.max() - numeric.min())
-    return max(float(span / target_bins), float(minimum))
+    raw_width = span / target_bins
+    if raw_width <= minimum:
+        return float(minimum)
+    nice_width = 10 ** math.ceil(math.log10(raw_width))
+    return float(min(max(nice_width, float(minimum)), float(maximum)))
 
 
 def adjust_bin_width(current, delta, minimum=1):
@@ -717,7 +734,7 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
     stats_df = pd.DataFrame([summary])
     st.dataframe(stats_df, use_container_width=True)
 
-    bin_width_key = f"bin_width_{metric}"
+    bin_width_key = f"bin_width_v2_{metric}"
     if bin_width_key not in st.session_state:
         st.session_state[bin_width_key] = default_bin_width(numeric_metric)
     bin_width = st.number_input(
@@ -1026,8 +1043,9 @@ def main():
                 progress_bar.progress(100, text=pipeline_status_text("finished"))
                 for result in results:
                     st.success(format_run_result(result))
-                if results:
-                    st.session_state["opened_run_dir"] = str(results[-1]["run_dir"])
+                result_to_open = select_run_result_to_open(results, pending_run.get("open_route"))
+                if result_to_open:
+                    st.session_state["opened_run_dir"] = str(result_to_open["run_dir"])
             except Exception as exc:
                 st.exception(exc)
             finally:
@@ -1103,17 +1121,31 @@ def main():
         with st.sidebar.expander("2. Run pipeline", expanded=project_is_running):
             if project_is_running:
                 st.info(pipeline_status_text("already_running"))
-            for label, routes in [
-                (f"Run {route_label('route_1')}", ["route_1"]),
-                (f"Run {route_label('route_2')}", ["route_2"]),
-                (f"Run {route_label('both')}", ["route_1", "route_2"]),
-            ]:
-                st.button(
-                    label,
-                    disabled=project_is_running,
-                    on_click=queue_pipeline_run,
-                    args=(selected_project, routes),
-                )
+            open_after_both = st.selectbox(
+                "Открыть в дашборде после прогона двух маршрутов",
+                ["route_1", "route_2"],
+                format_func=route_label,
+                key="open_route_after_both",
+                disabled=project_is_running,
+            )
+            st.button(
+                f"Run {route_label('route_1')}",
+                disabled=project_is_running,
+                on_click=queue_pipeline_run,
+                args=(selected_project, ["route_1"], "route_1"),
+            )
+            st.button(
+                f"Run {route_label('route_2')}",
+                disabled=project_is_running,
+                on_click=queue_pipeline_run,
+                args=(selected_project, ["route_2"], "route_2"),
+            )
+            st.button(
+                f"Run {route_label('both')}",
+                disabled=project_is_running,
+                on_click=queue_pipeline_run,
+                args=(selected_project, ["route_1", "route_2"], open_after_both),
+            )
 
         with st.sidebar.expander("3. Open dashboard", expanded=True):
             st.caption(pipeline_status_text("open_dashboard_caption"))

@@ -39,6 +39,7 @@ from dashboard_streamlit import (
     project_route_uploads_exist,
     project_run_lock_status,
     routes_for_ui_mode,
+    select_run_result_to_open,
     should_render_upload_widgets,
     sort_metric_columns,
     project_select_options,
@@ -444,7 +445,35 @@ def test_make_pipeline_run_request_stores_project_and_routes():
     assert make_pipeline_run_request("950", ("route_1", "route_2")) == {
         "project": "950",
         "routes": ["route_1", "route_2"],
+        "open_route": "route_1",
     }
+
+
+def test_make_pipeline_run_request_accepts_explicit_open_route():
+    assert make_pipeline_run_request("950", ("route_1", "route_2"), open_route="route_2") == {
+        "project": "950",
+        "routes": ["route_1", "route_2"],
+        "open_route": "route_2",
+    }
+
+
+def test_select_run_result_to_open_uses_preferred_route():
+    results = [
+        {"route": "route_1", "run_dir": "run_001_route_1"},
+        {"route": "route_2", "run_dir": "run_002_route_2"},
+    ]
+
+    assert select_run_result_to_open(results, "route_1") == results[0]
+    assert select_run_result_to_open(results, "route_2") == results[1]
+
+
+def test_select_run_result_to_open_falls_back_to_last_result():
+    results = [
+        {"route": "route_1", "run_dir": "run_001_route_1"},
+        {"route": "route_2", "run_dir": "run_002_route_2"},
+    ]
+
+    assert select_run_result_to_open(results, "route_3") == results[-1]
 
 
 def test_latest_project_run_name_returns_newest_run(tmp_path):
@@ -583,6 +612,8 @@ def test_build_bin_table_by_width_uses_fixed_bin_width():
 def test_default_bin_width_is_small_editable_starting_value():
     assert default_bin_width(pd.Series([0, 300])) == 10
     assert default_bin_width(pd.Series([0, 1])) == 1
+    assert default_bin_width(pd.Series([0, 999])) == 100
+    assert default_bin_width(pd.Series([0, 100_000_000])) == 1000
 
 
 def test_adjust_bin_width_uses_explicit_button_steps_and_never_goes_below_minimum():
