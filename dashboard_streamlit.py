@@ -105,6 +105,11 @@ def project_run_lock_path(project_name, projects_dir=DATA_PROJECTS_DIR):
     return Path(projects_dir) / str(project_name) / ".pipeline.lock"
 
 
+def project_run_lock_status(project_name, projects_dir=DATA_PROJECTS_DIR):
+    lock_path = project_run_lock_path(project_name, projects_dir=projects_dir)
+    return {"locked": lock_path.exists(), "path": lock_path}
+
+
 def acquire_project_run_lock(project_name, projects_dir=DATA_PROJECTS_DIR):
     lock_path = project_run_lock_path(project_name, projects_dir=projects_dir)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -903,7 +908,16 @@ def main():
         st.sidebar.info("Create a project before uploading files or running the pipeline.")
 
     if selected_project:
-        project_is_running = is_running or project_run_lock_path(selected_project).exists()
+        lock_status = project_run_lock_status(selected_project)
+        project_is_running = is_running or lock_status["locked"]
+        if lock_status["locked"] and not is_running:
+            st.sidebar.warning(
+                "Найден lock-файл предыдущего прогона. Если сейчас прогон не выполняется, "
+                "сбросьте lock, чтобы снова включить загрузку файлов."
+            )
+            if st.sidebar.button("Сбросить зависший lock"):
+                release_project_run_lock(selected_project)
+                st.rerun()
         with st.sidebar.expander("1. Upload files", expanded=False):
             if latest_run:
                 st.caption(f"Latest run: {latest_run}")

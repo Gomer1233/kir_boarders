@@ -32,6 +32,7 @@ from dashboard_streamlit import (
     network_chart_color,
     normalize_new_project_input,
     project_route_uploads_exist,
+    project_run_lock_status,
     routes_for_ui_mode,
     sort_metric_columns,
     project_select_options,
@@ -379,6 +380,20 @@ def test_project_run_lock_prevents_second_parallel_run(tmp_path):
     release_project_run_lock("950", projects_dir=tmp_path)
 
     assert acquire_project_run_lock("950", projects_dir=tmp_path) is True
+    release_project_run_lock("950", projects_dir=tmp_path)
+
+
+def test_project_run_lock_status_reports_lock_path(tmp_path):
+    unlocked = project_run_lock_status("950", projects_dir=tmp_path)
+
+    assert unlocked["locked"] is False
+    assert unlocked["path"] == tmp_path / "950" / ".pipeline.lock"
+
+    acquire_project_run_lock("950", projects_dir=tmp_path)
+    locked = project_run_lock_status("950", projects_dir=tmp_path)
+
+    assert locked["locked"] is True
+    assert locked["path"] == tmp_path / "950" / ".pipeline.lock"
     release_project_run_lock("950", projects_dir=tmp_path)
 
 
