@@ -414,39 +414,24 @@ def network_chart_color(network_name):
 def network_brand_html(network_name):
     name = str(network_name).lower()
     if "\u043f\u044f\u0442\u0435\u0440" in name or "pyater" in name:
-        return """
-        <div class="network-brand brand-pyaterochka" style="
-            display:inline-flex;align-items:center;gap:12px;margin:4px 0 10px 0;
-            padding:8px 14px 8px 8px;border-radius:16px;
-            background:linear-gradient(135deg, rgba(229,35,32,0.18), rgba(229,35,32,0.05));
-            border:1px solid rgba(229,35,32,0.5);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
-        ">
-            <span style="
-                display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;
-                border-radius:50%;background:#e52320;color:#ffffff;font-size:31px;font-weight:900;
-                font-family:Georgia,serif;line-height:1;box-shadow:0 0 0 4px rgba(255,255,255,0.12);
-            ">5</span>
-            <span style="color:#ff5a54;font-size:1.4rem;font-weight:900;letter-spacing:-0.03em;">Пятёрочка</span>
-        </div>
-        """
+        brand_class = "brand-pyaterochka"
+        label = "\u041f\u044f\u0442\u0451\u0440\u043e\u0447\u043a\u0430"
+        color = "#e52320"
     if "\u043f\u0435\u0440\u0435\u043a" in name or "perek" in name:
-        return """
-        <div class="network-brand brand-perekrestok" style="
-            display:inline-flex;align-items:center;gap:12px;margin:4px 0 10px 0;
-            padding:8px 16px 8px 10px;border-radius:16px;
-            background:linear-gradient(135deg, rgba(0,132,61,0.2), rgba(124,194,66,0.08));
-            border:1px solid rgba(0,132,61,0.55);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
-        ">
-            <span style="
-                color:#7cc242;font-size:30px;font-weight:900;line-height:1;
-                text-shadow:12px 0 0 #00843d;
-            ">∞</span>
-            <span style="color:#36b56a;font-size:1.4rem;font-weight:900;letter-spacing:-0.04em;">Перекрёсток</span>
-        </div>
-        """
+        brand_class = "brand-perekrestok"
+        label = "\u041f\u0435\u0440\u0435\u043a\u0440\u0451\u0441\u0442\u043e\u043a"
+        color = "#00843d"
+    if "\u043f\u044f\u0442\u0435\u0440" not in name and "pyater" not in name and "\u043f\u0435\u0440\u0435\u043a" not in name and "perek" not in name:
+        brand_class = "brand-generic"
+        label = str(network_name)
+        color = "#cbd5e1"
     return (
-        '<div class="network-brand" style="margin:4px 0 10px 0;font-size:1rem;font-weight:800;color:#e2e8f0;">'
-        f"{escape(str(network_name))}</div>"
+        f'<div class="network-brand {brand_class}" style="margin:0 0 8px 0;">'
+        '<div style="display:flex;align-items:center;gap:9px;min-height:24px;">'
+        f'<span style="display:inline-block;width:18px;height:2px;border-radius:999px;background:{color};opacity:0.95;"></span>'
+        f'<span style="color:{color};font-size:1.05rem;font-weight:850;letter-spacing:-0.02em;">{escape(label)}</span>'
+        '</div>'
+        '</div>'
     )
 
 
@@ -655,17 +640,15 @@ def relationship_heading_html(metric, comparison):
         {"accent": "#93c5fd", "background": "rgba(147, 197, 253, 0.16)"},
     )
     return (
-        '<div class="relationship-heading" '
-        'style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
-        'margin:22px 0 12px 0;font-size:1.35rem;font-weight:800;line-height:1.25;">'
-        f'<span class="metric-badge" style="color:#f8fafc;">{escape(str(metric))}</span>'
-        '<span style="font-size:0.78rem;letter-spacing:0.12em;color:#94a3b8;'
-        'border:1px solid rgba(148,163,184,0.45);border-radius:999px;'
-        'padding:3px 9px;">VS</span>'
-        f'<span class="comparison-badge" style="color:{colors["accent"]};'
-        f'background:{colors["background"]};border:1px solid {colors["accent"]};'
-        'border-radius:999px;padding:5px 12px;">'
+        '<div class="relationship-heading" style="margin:22px 0 16px 0;">'
+        '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;'
+        'font-size:1.28rem;font-weight:820;line-height:1.28;">'
+        f'<span class="metric-label" style="color:#f8fafc;">{escape(str(metric))}</span>'
+        '<span style="font-size:0.78rem;letter-spacing:0.14em;color:#94a3b8;font-weight:760;">VS</span>'
+        f'<span class="comparison-label" style="color:{colors["accent"]};'
+        f'border-bottom:2px solid {colors["accent"]};padding-bottom:2px;">'
         f'{escape(str(comparison))}</span>'
+        '</div>'
         '</div>'
     )
 

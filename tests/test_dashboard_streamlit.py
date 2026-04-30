@@ -152,21 +152,24 @@ def test_network_chart_color_uses_soft_brand_colors():
     assert network_chart_color("Unknown") == "#79bff2"
 
 
-def test_network_brand_html_renders_pyaterochka_brand_badge():
+def test_network_brand_html_renders_pyaterochka_brand_label():
     html = network_brand_html("ТС Пятерочка")
 
     assert "brand-pyaterochka" in html
     assert "Пятёрочка" in html
-    assert ">5<" in html
     assert "#e52320" in html
+    assert ">5<" not in html
+    assert "border-radius:50%" not in html
 
 
-def test_network_brand_html_renders_perekrestok_brand_badge():
+def test_network_brand_html_renders_perekrestok_brand_label():
     html = network_brand_html("ТС Перекресток")
 
     assert "brand-perekrestok" in html
     assert "Перекрёсток" in html
     assert "#00843d" in html
+    assert "∞" not in html
+    assert "text-shadow" not in html
 
 
 def test_network_brand_html_escapes_unknown_network_name():
@@ -707,9 +710,9 @@ def test_relationship_heading_html_makes_vs_and_comparison_metric_visually_expli
 
     assert "VS" in html
     assert "relationship-heading" in html
-    assert "comparison-badge" in html
-    assert "metric-badge" in html
-    assert "background:" in html
+    assert "comparison-label" in html
+    assert "metric-label" in html
+    assert "comparison-badge" not in html
     assert REVENUE in html
     assert "KIR &lt;950&gt;" in html
     assert "KIR <950>" not in html
