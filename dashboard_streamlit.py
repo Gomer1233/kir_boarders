@@ -828,6 +828,167 @@ def calculate_relationship_stats(df, metric, relationship_columns):
     return pd.DataFrame(rows, columns=["comparison", "pearson", "spearman", "rows_used"])
 
 
+def _correlation_value(value):
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
+def _format_correlation(value):
+    value = _correlation_value(value)
+    return "n/a" if value is None else f"{value:.2f}"
+
+
+def correlation_strength_label(value):
+    value = _correlation_value(value)
+    if value is None:
+        return "\u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445"
+
+    absolute = abs(value)
+    if absolute < 0.20:
+        return "\u0441\u0432\u044f\u0437\u0438 \u043f\u043e\u0447\u0442\u0438 \u043d\u0435\u0442"
+    if absolute < 0.40:
+        level = "\u0441\u043b\u0430\u0431\u0430\u044f"
+    elif absolute < 0.60:
+        level = "\u0443\u043c\u0435\u0440\u0435\u043d\u043d\u0430\u044f"
+    elif absolute < 0.80:
+        level = "\u0441\u0438\u043b\u044c\u043d\u0430\u044f"
+    else:
+        level = "\u043e\u0447\u0435\u043d\u044c \u0441\u0438\u043b\u044c\u043d\u0430\u044f"
+    direction = "\u043f\u043e\u043b\u043e\u0436\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f" if value > 0 else "\u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u0430\u044f"
+    return f"{level} {direction} \u0441\u0432\u044f\u0437\u044c"
+
+
+def prepare_correlation_display_stats(stats):
+    display = stats.copy()
+    if display.empty:
+        display["\u0421\u0438\u043b\u0430 \u0441\u0432\u044f\u0437\u0438"] = []
+        return display
+    display["\u0421\u0438\u043b\u0430 \u0441\u0432\u044f\u0437\u0438"] = display["spearman"].apply(correlation_strength_label)
+    display = display.rename(
+        columns={
+            "comparison": "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c",
+            "pearson": "Pearson",
+            "spearman": "Spearman",
+            "rows_used": "\u0421\u0442\u0440\u043e\u043a \u0432 \u0440\u0430\u0441\u0447\u0435\u0442\u0435",
+        }
+    )
+    return display[["\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c", "Pearson", "Spearman", "\u0421\u0438\u043b\u0430 \u0441\u0432\u044f\u0437\u0438", "\u0421\u0442\u0440\u043e\u043a \u0432 \u0440\u0430\u0441\u0447\u0435\u0442\u0435"]]
+
+
+def correlation_business_insights(stats, network_name=None):
+    if stats.empty:
+        return ["\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u0434\u043b\u044f \u0438\u043d\u0442\u0435\u0440\u043f\u0440\u0435\u0442\u0430\u0446\u0438\u0438 \u043a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u0438."]
+
+    source = stats.copy()
+    source["_abs_spearman"] = pd.to_numeric(source["spearman"], errors="coerce").abs()
+    valid = source.dropna(subset=["_abs_spearman"])
+    if valid.empty:
+        return ["\u041a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u044f \u043d\u0435 \u0440\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u043b\u0430\u0441\u044c: \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u0430\u043b\u043e \u043f\u0430\u0440 \u0447\u0438\u0441\u043b\u043e\u0432\u044b\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0439."]
+
+    best = valid.sort_values("_abs_spearman", ascending=False).iloc[0]
+    best_spearman = _format_correlation(best["spearman"])
+    insights = [
+        f"\u0421\u0430\u043c\u0430\u044f \u0437\u0430\u043c\u0435\u0442\u043d\u0430\u044f \u0441\u0432\u044f\u0437\u044c: {best['comparison']} - Spearman {best_spearman} ({correlation_strength_label(best['spearman'])})."
+    ]
+
+    for _, row in valid.iterrows():
+        pearson = _correlation_value(row["pearson"])
+        spearman = _correlation_value(row["spearman"])
+        if pearson is None or spearman is None:
+            continue
+        if abs(spearman) - abs(pearson) >= 0.20 and abs(spearman) >= 0.30:
+            insights.append(
+                f"{row['comparison']}: \u0440\u0430\u043d\u0433\u043e\u0432\u0430\u044f \u0441\u0432\u044f\u0437\u044c \u0437\u0430\u043c\u0435\u0442\u043d\u0435\u0435 \u043b\u0438\u043d\u0435\u0439\u043d\u043e\u0439 "
+                f"(Spearman {_format_correlation(spearman)}, Pearson {_format_correlation(pearson)}). "
+                "\u042d\u0442\u043e \u0447\u0430\u0441\u0442\u043e \u043e\u0437\u043d\u0430\u0447\u0430\u0435\u0442 \u043d\u0435\u043b\u0438\u043d\u0435\u0439\u043d\u043e\u0441\u0442\u044c, \u0445\u0432\u043e\u0441\u0442\u044b \u0438\u043b\u0438 \u0432\u043b\u0438\u044f\u043d\u0438\u0435 \u0432\u044b\u0431\u0440\u043e\u0441\u043e\u0432."
+            )
+
+    min_rows = int(valid["rows_used"].min()) if "rows_used" in valid.columns else 0
+    scope_name = network_name or "\u0441\u0435\u0442\u0438"
+    insights.append(f"\u0412\u044b\u0432\u043e\u0434 \u043f\u043e {scope_name} \u043e\u0441\u043d\u043e\u0432\u0430\u043d \u043c\u0438\u043d\u0438\u043c\u0443\u043c \u043d\u0430 {min_rows:,} \u0441\u0442\u0440\u043e\u043a\u0430\u0445 \u043f\u043e\u0441\u043b\u0435 \u0444\u0438\u043b\u044c\u0442\u0440\u043e\u0432.")
+    return insights
+
+
+def compare_network_correlations(stats_by_network):
+    if len(stats_by_network) < 2:
+        return []
+
+    names = list(stats_by_network)
+    first = stats_by_network[names[0]]
+    comparisons = first["comparison"].tolist() if "comparison" in first.columns else []
+    lines = []
+    for comparison in comparisons:
+        values = []
+        for network_name, stats in stats_by_network.items():
+            match = stats[stats["comparison"] == comparison]
+            if match.empty:
+                continue
+            row = match.iloc[0]
+            spearman = _correlation_value(row["spearman"])
+            if spearman is None:
+                continue
+            values.append((network_name, spearman))
+        if len(values) < 2:
+            continue
+        values = sorted(values, key=lambda item: abs(item[1]), reverse=True)
+        best_name, best_value = values[0]
+        second_name, second_value = values[1]
+        delta = abs(best_value) - abs(second_value)
+        if delta < 0.05:
+            lines.append(
+                f"{comparison}: \u0440\u0430\u0437\u043b\u0438\u0447\u0438\u0435 \u043d\u0435\u0431\u043e\u043b\u044c\u0448\u043e\u0435 "
+                f"(Spearman {best_name} {_format_correlation(best_value)}, {second_name} {_format_correlation(second_value)}, \u0394 {delta:.2f})."
+            )
+        else:
+            lines.append(
+                f"{comparison}: \u0441\u0432\u044f\u0437\u044c \u0441\u0438\u043b\u044c\u043d\u0435\u0435 \u0443 {best_name} "
+                f"(Spearman {_format_correlation(best_value)} vs {_format_correlation(second_value)}, \u0394 {delta:.2f})."
+            )
+
+    row_counts = []
+    for stats in stats_by_network.values():
+        if "rows_used" in stats.columns and not stats.empty:
+            row_counts.append(int(pd.to_numeric(stats["rows_used"], errors="coerce").min()))
+    if row_counts and min(row_counts) > 0 and max(row_counts) / min(row_counts) >= 3:
+        lines.append("\u0412\u0430\u0436\u043d\u043e: rows_used \u043c\u0435\u0436\u0434\u0443 \u0422\u0421 \u0441\u0438\u043b\u044c\u043d\u043e \u043e\u0442\u043b\u0438\u0447\u0430\u044e\u0442\u0441\u044f, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043d\u0443\u0436\u043d\u043e \u0447\u0438\u0442\u0430\u0442\u044c \u043e\u0441\u0442\u043e\u0440\u043e\u0436\u043d\u043e.")
+    return lines
+
+
+def render_correlation_interpretation_html(network_name, stats):
+    insights = correlation_business_insights(stats, network_name)
+    insight_items = "".join(f"<li>{escape(line)}</li>" for line in insights)
+    network = escape(str(network_name))
+    return (
+        '<div class="correlation-interpretation" style="margin-top:12px;padding:13px 15px;'
+        'border:1px solid rgba(148,163,184,0.20);border-radius:14px;'
+        'background:linear-gradient(135deg, rgba(15,23,42,0.72), rgba(30,41,59,0.36));">'
+        f'<div style="font-weight:820;color:#e2e8f0;margin-bottom:8px;">\u041a\u0430\u043a \u0447\u0438\u0442\u0430\u0442\u044c \u043a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u0438: {network}</div>'
+        '<div style="color:#94a3b8;font-size:0.86rem;line-height:1.45;margin-bottom:8px;">'
+        'Pearson \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043b\u0438\u043d\u0435\u0439\u043d\u0443\u044e \u0441\u0432\u044f\u0437\u044c. Spearman \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0440\u0430\u043d\u0433\u043e\u0432\u0443\u044e \u0441\u0432\u044f\u0437\u044c \u0438 \u0443\u0441\u0442\u043e\u0439\u0447\u0438\u0432\u0435\u0435 \u043a \u0445\u0432\u043e\u0441\u0442\u0430\u043c. '
+        '\u0414\u043b\u044f \u0441\u0438\u043b\u044b \u0441\u0432\u044f\u0437\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c |Spearman|: 0.00-0.19 \u043f\u043e\u0447\u0442\u0438 \u043d\u0435\u0442, 0.20-0.39 \u0441\u043b\u0430\u0431\u0430\u044f, 0.40-0.59 \u0443\u043c\u0435\u0440\u0435\u043d\u043d\u0430\u044f, 0.60-0.79 \u0441\u0438\u043b\u044c\u043d\u0430\u044f, 0.80-1.00 \u043e\u0447\u0435\u043d\u044c \u0441\u0438\u043b\u044c\u043d\u0430\u044f. '
+        '\u041a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u044f \u043d\u0435 \u0434\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043f\u0440\u0438\u0447\u0438\u043d\u043d\u043e-\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u0443\u044e \u0441\u0432\u044f\u0437\u044c.'
+        '</div>'
+        f'<ul style="margin:0;padding-left:18px;color:#cbd5e1;font-size:0.86rem;line-height:1.48;">{insight_items}</ul>'
+        '</div>'
+    )
+
+
+def render_network_correlation_comparison_html(stats_by_network):
+    lines = compare_network_correlations(stats_by_network)
+    if not lines:
+        return ""
+    items = "".join(f"<li>{escape(line)}</li>" for line in lines)
+    return (
+        '<div class="network-correlation-comparison" style="margin:12px 0 18px 0;padding:13px 15px;'
+        'border:1px solid rgba(96,165,250,0.24);border-left:4px solid #60a5fa;'
+        'border-radius:14px;background:rgba(96,165,250,0.09);">'
+        '<div style="font-weight:820;color:#e2e8f0;margin-bottom:8px;">\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u0422\u0421 \u043f\u043e Spearman</div>'
+        f'<ul style="margin:0;padding-left:18px;color:#cbd5e1;font-size:0.86rem;line-height:1.48;">{items}</ul>'
+        '</div>'
+    )
+
+
 def _apply_sidebar_filters(df):
     _require_streamlit()
     filtered = df.copy()
@@ -1092,10 +1253,17 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         return
 
     network_names = [name for name, _ in networks]
+    stats_by_network = {}
     for network_name, network_df in networks:
         stats = calculate_relationship_stats(network_df, metric, available)
+        stats_by_network[network_name] = stats
         with st.expander(f"Correlation stats: {network_name}", expanded=False):
-            st.dataframe(stats, use_container_width=True)
+            st.dataframe(prepare_correlation_display_stats(stats), use_container_width=True)
+            st.markdown(render_correlation_interpretation_html(network_name, stats), unsafe_allow_html=True)
+
+    comparison_html = render_network_correlation_comparison_html(stats_by_network)
+    if comparison_html:
+        st.markdown(comparison_html, unsafe_allow_html=True)
 
     network_by_name = {name: df for name, df in networks}
     for row in relationship_chart_rows(network_names, available):

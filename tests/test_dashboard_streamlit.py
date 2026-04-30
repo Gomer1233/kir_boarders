@@ -15,6 +15,7 @@ from dashboard_streamlit import (
     format_running_message,
     metric_analysis_context,
     render_metric_analysis_context_html,
+    render_correlation_interpretation_html,
     pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
@@ -24,6 +25,9 @@ from dashboard_streamlit import (
     calculate_relationship_stats,
     chart_settings_summary,
     collapse_tail_bins,
+    compare_network_correlations,
+    correlation_business_insights,
+    correlation_strength_label,
     filter_zero_metric_values,
     filter_label,
     format_percentile_card,
@@ -410,6 +414,77 @@ def test_calculate_relationship_stats_returns_correlations():
     assert stats.loc[stats["comparison"] == WRITEOFFS, "pearson"].iloc[0] == 1.0
     assert stats.loc[stats["comparison"] == REVENUE, "pearson"].iloc[0] == -1.0
     assert stats["rows_used"].tolist() == [4, 4]
+
+
+def test_correlation_strength_label_uses_spearman_business_ranges():
+    assert correlation_strength_label(None) == "нет данных"
+    assert correlation_strength_label(0.10) == "связи почти нет"
+    assert correlation_strength_label(0.40) == "умеренная положительная связь"
+    assert correlation_strength_label(-0.73) == "сильная отрицательная связь"
+    assert correlation_strength_label(0.86) == "очень сильная положительная связь"
+
+
+def test_prepare_correlation_display_stats_adds_business_strength_column():
+    stats = pd.DataFrame(
+        [
+            {"comparison": WRITEOFFS, "pearson": 0.11, "spearman": 0.40, "rows_used": 1029},
+            {"comparison": REVENUE, "pearson": 0.39, "spearman": 0.60, "rows_used": 1029},
+        ]
+    )
+
+    display = prepare_correlation_display_stats(stats)
+
+    assert display["Сила связи"].tolist() == ["умеренная положительная связь", "сильная положительная связь"]
+    assert display.columns.tolist() == ["Показатель", "Pearson", "Spearman", "Сила связи", "Строк в расчете"]
+
+
+def test_correlation_business_insights_explain_best_signal_and_nonlinear_gap():
+    stats = pd.DataFrame(
+        [
+            {"comparison": WRITEOFFS, "pearson": 0.11, "spearman": 0.40, "rows_used": 1029},
+            {"comparison": REVENUE, "pearson": 0.39, "spearman": 0.60, "rows_used": 1029},
+        ]
+    )
+
+    insights = correlation_business_insights(stats, "ТС Перекресток")
+
+    assert any("Самая заметная связь: Выручка" in line for line in insights)
+    assert any("Spearman 0.60" in line for line in insights)
+    assert any("Списания" in line and "ранговая связь заметнее линейной" in line for line in insights)
+
+
+def test_compare_network_correlations_highlights_stronger_network_and_small_differences():
+    perek = pd.DataFrame(
+        [
+            {"comparison": REVENUE, "pearson": 0.39, "spearman": 0.60, "rows_used": 1029},
+            {"comparison": WRITEOFFS, "pearson": 0.11, "spearman": 0.40, "rows_used": 1029},
+        ]
+    )
+    pyater = pd.DataFrame(
+        [
+            {"comparison": REVENUE, "pearson": 0.41, "spearman": 0.52, "rows_used": 24813},
+            {"comparison": WRITEOFFS, "pearson": 0.04, "spearman": 0.39, "rows_used": 24813},
+        ]
+    )
+
+    comparison = compare_network_correlations({"ТС Перекресток": perek, "ТС Пятерочка": pyater})
+
+    assert any("Выручка" in line and "сильнее у ТС Перекресток" in line and "Δ 0.08" in line for line in comparison)
+    assert any("Списания" in line and "различие небольшое" in line for line in comparison)
+    assert any("rows_used" in line and "сильно отличаются" in line for line in comparison)
+
+
+def test_render_correlation_interpretation_html_escapes_values_and_explains_methods():
+    stats = pd.DataFrame([{"comparison": "A <B>", "pearson": 0.11, "spearman": 0.40, "rows_used": 10}])
+
+    html = render_correlation_interpretation_html("ТС <Перекресток>", stats)
+
+    assert "Pearson" in html
+    assert "Spearman" in html
+    assert "не доказывает причинно-следственную связь" in html
+    assert "ТС &lt;Перекресток&gt;" in html
+    assert "A &lt;B&gt;" in html
+    assert "A <B>" not in html
 
 
 from dashboard_streamlit import format_week_label
@@ -801,6 +876,7 @@ from dashboard_streamlit import (
     relationship_chart_rows,
     relationship_heading_html,
     percentile_store_counts,
+    prepare_correlation_display_stats,
     split_by_network,
 )
 
