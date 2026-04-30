@@ -129,17 +129,19 @@ def test_apply_filter_values_filters_only_selected_columns():
 def test_format_percentile_card_separates_count_from_threshold():
     card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33})
 
-    assert card == {"label": "Stores >= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+    assert card == {"label": "Stores >= P85", "count": "21,140", "threshold_label": "Порог метрики", "threshold_value": "4,197.33"}
 
 
 def test_render_percentile_card_html_includes_soft_percentile_color():
-    card = {"label": "Stores >= P85", "count": "21,140", "threshold": "Threshold: 4,197.33"}
+    card = {"label": "Stores >= P85", "count": "21,140", "threshold_label": "Порог метрики", "threshold_value": "4,197.33"}
 
     html = render_percentile_card_html(card, "#ff4d4d")
 
     assert "Stores &gt;= P85" in html
     assert "21,140" in html
-    assert "Threshold: 4,197.33" in html
+    assert "Порог метрики" in html
+    assert "Threshold" not in html
+    assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33</span>' in html
     assert "#ff4d4d" in html
 
 

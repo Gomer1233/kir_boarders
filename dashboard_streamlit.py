@@ -372,14 +372,16 @@ def format_percentile_card(label, item):
     return {
         "label": label,
         "count": f"{int(item['count']):,}",
-        "threshold": f"Threshold: {_format_number(item['threshold'])}",
+        "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
+        "threshold_value": _format_number(item["threshold"]),
     }
 
 
 def render_percentile_card_html(card, color):
     label = escape(str(card["label"]))
     count = escape(str(card["count"]))
-    threshold = escape(str(card["threshold"]))
+    threshold_label = escape(str(card["threshold_label"]))
+    threshold_value = escape(str(card["threshold_value"]))
     color = escape(str(color))
     return f"""
     <div style="
@@ -393,7 +395,9 @@ def render_percentile_card_html(card, color):
     ">
         <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
         <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">{count}</div>
-        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.62); margin-top: 18px;">{threshold}</div>
+        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
+            {threshold_label}: <span style="color:{color};font-weight:850;">{threshold_value}</span>
+        </div>
     </div>
     """
 
