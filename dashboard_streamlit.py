@@ -437,10 +437,16 @@ def metric_unit_for_metric(metric):
 
 def format_percentile_card(label, item, metric_unit=""):
     count = f"{int(item['count']):,}"
+    share = item.get("share")
+    if share is None:
+        total_count = int(item.get("total_count", 0))
+        share = int(item["count"]) / total_count if total_count else 0
+    count_share = f"{float(share):.1%}"
     direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
     return {
         "label": label,
         "count": count,
+        "count_share": count_share,
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
         "threshold_value": _format_number(item["threshold"]),
         "threshold_unit": metric_unit,
@@ -451,6 +457,7 @@ def format_percentile_card(label, item, metric_unit=""):
 def render_percentile_card_html(card, color):
     label = escape(str(card["label"]))
     count = escape(str(card["count"]))
+    count_share = escape(str(card.get("count_share", "")))
     threshold_label = escape(str(card["threshold_label"]))
     threshold_value = escape(str(card["threshold_value"]))
     threshold_unit = escape(str(card.get("threshold_unit", "")))
@@ -468,7 +475,9 @@ def render_percentile_card_html(card, color):
         min-height: 132px;
     ">
         <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
-        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">{count}</div>
+        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
+            {count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>
+        </div>
         <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
             {threshold_label}
             <span style="color:{color};font-weight:850;">{threshold_display}</span>
@@ -681,15 +690,16 @@ def percentile_store_counts(series, custom_percentile, store_series=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return {
-            "p25": {"percentile": 25, "threshold": None, "count": 0},
-            "p85": {"percentile": 85, "threshold": None, "count": 0},
-            "custom": {"percentile": custom_percentile, "threshold": None, "count": 0},
+            "p25": {"percentile": 25, "threshold": None, "count": 0, "total_count": 0, "share": 0},
+            "p85": {"percentile": 85, "threshold": None, "count": 0, "total_count": 0, "share": 0},
+            "custom": {"percentile": custom_percentile, "threshold": None, "count": 0, "total_count": 0, "share": 0},
         }
 
     source = pd.DataFrame({"metric": pd.to_numeric(series, errors="coerce")})
     if store_series is not None:
         source["store"] = store_series
     source = source.dropna(subset=["metric"])
+    total_count = int(source["store"].nunique()) if "store" in source.columns else int(len(source))
 
     def make_item(percentile):
         threshold = float(source["metric"].quantile(percentile / 100))
@@ -702,6 +712,8 @@ def percentile_store_counts(series, custom_percentile, store_series=None):
             "percentile": percentile,
             "threshold": threshold,
             "count": count,
+            "total_count": total_count,
+            "share": float(count / total_count) if total_count else 0,
         }
 
     return {"p25": make_item(25), "p85": make_item(85), "custom": make_item(custom_percentile)}

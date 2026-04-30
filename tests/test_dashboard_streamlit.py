@@ -185,11 +185,12 @@ def test_apply_filter_values_filters_only_selected_columns():
 
 
 def test_format_percentile_card_separates_count_from_threshold():
-    card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33}, metric_unit="руб")
+    card = format_percentile_card("Stores >= P85", {"count": 21140, "total_count": 26213, "threshold": 4197.33}, metric_unit="руб")
 
     assert card == {
         "label": "Stores >= P85",
         "count": "21,140",
+        "count_share": "80.6%",
         "threshold_label": "Порог метрики",
         "threshold_value": "4,197.33",
         "threshold_unit": "руб",
@@ -198,9 +199,10 @@ def test_format_percentile_card_separates_count_from_threshold():
 
 
 def test_format_percentile_card_explains_lower_threshold_direction():
-    card = format_percentile_card("Stores <= P25", {"count": 6498, "threshold": 0}, metric_unit="шт")
+    card = format_percentile_card("Stores <= P25", {"count": 6498, "total_count": 26213, "threshold": 0}, metric_unit="шт")
 
     assert card["threshold_unit"] == "шт"
+    assert card["count_share"] == "24.8%"
     assert card["threshold_help"] == "Это значение КИР, ниже или равно которому находится 6,498 магазинов."
 
 
@@ -214,6 +216,7 @@ def test_render_percentile_card_html_includes_soft_percentile_color():
     card = {
         "label": "Stores >= P85",
         "count": "21,140",
+        "count_share": "80.6%",
         "threshold_label": "Порог метрики",
         "threshold_value": "4,197.33",
         "threshold_unit": "руб",
@@ -224,6 +227,7 @@ def test_render_percentile_card_html_includes_soft_percentile_color():
 
     assert "Stores &gt;= P85" in html
     assert "21,140" in html
+    assert "(80.6%)" in html
     assert "Порог метрики" in html
     assert "Threshold" not in html
     assert "info-icon" not in html
@@ -786,10 +790,14 @@ def test_percentile_store_counts_counts_low_p25_and_high_upper_thresholds():
 
     assert result["p25"]["percentile"] == 25
     assert result["p25"]["count"] == 1
+    assert result["p25"]["total_count"] == 4
+    assert result["p25"]["share"] == 0.25
     assert result["p85"]["percentile"] == 85
     assert result["p85"]["count"] == 1
     assert result["custom"]["percentile"] == 50
     assert result["custom"]["count"] == 2
+    assert result["custom"]["total_count"] == 4
+    assert result["custom"]["share"] == 0.5
 
 
 def test_split_by_network_returns_one_frame_per_ts():
@@ -887,3 +895,5 @@ def test_percentile_store_counts_counts_unique_stores_when_store_series_is_provi
     )
 
     assert result["custom"]["count"] == 2
+    assert result["custom"]["total_count"] == 3
+    assert result["custom"]["share"] == 2 / 3
