@@ -615,6 +615,12 @@ def prepare_bin_chart_table(bin_table):
 
     chart_table["bin_mid"] = (pd.to_numeric(chart_table["bin_start"]) + pd.to_numeric(chart_table["bin_end"])) / 2
     chart_table["bar_width"] = pd.to_numeric(chart_table["bin_end"]) - pd.to_numeric(chart_table["bin_start"])
+    tail_mask = chart_table["bin"].astype(str).str.startswith("Tail:")
+    if tail_mask.any():
+        regular_widths = chart_table.loc[~tail_mask, "bar_width"]
+        visual_width = float(regular_widths[regular_widths.gt(0)].median()) if regular_widths.gt(0).any() else 1.0
+        chart_table.loc[tail_mask, "bar_width"] = visual_width
+        chart_table.loc[tail_mask, "bin_mid"] = pd.to_numeric(chart_table.loc[tail_mask, "bin_start"]) + visual_width / 2
     return chart_table
 
 

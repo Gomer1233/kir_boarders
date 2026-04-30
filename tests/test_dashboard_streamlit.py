@@ -841,7 +841,13 @@ def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
     assert [call for call in calls if call[0] == "read"] == [("read", str(path), 123)]
 
 
-from dashboard_streamlit import DASHBOARD_SCREENS, build_bin_table_by_width, default_bin_width, sample_for_plot
+from dashboard_streamlit import (
+    DASHBOARD_SCREENS,
+    build_bin_table_by_width,
+    default_bin_width,
+    prepare_bin_chart_table,
+    sample_for_plot,
+)
 
 
 def test_dashboard_screens_match_tz_sections():
@@ -881,6 +887,21 @@ def test_build_bin_table_by_width_caps_huge_bin_counts_with_tail():
     assert len(table) == 10
     assert table.iloc[-1]["bin"].startswith("Tail:")
     assert table.iloc[-1]["count"] == 1
+
+
+def test_prepare_bin_chart_table_draws_tail_as_compact_bar():
+    table = pd.DataFrame(
+        [
+            {"bin_start": 0.0, "bin_end": 1.0, "bin": "0 - 1", "count": 10, "store_count": 10, "share": 0.5},
+            {"bin_start": 1.0, "bin_end": 2.0, "bin": "1 - 2", "count": 8, "store_count": 8, "share": 0.4},
+            {"bin_start": 2.0, "bin_end": 100000.0, "bin": "Tail: >= 2", "count": 2, "store_count": 2, "share": 0.1},
+        ]
+    )
+
+    chart = prepare_bin_chart_table(table)
+
+    assert chart.loc[2, "bar_width"] == 1.0
+    assert chart.loc[2, "bin_mid"] == 2.5
 
 
 def test_metric_analysis_does_not_render_boxplot():
