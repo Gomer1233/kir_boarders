@@ -848,6 +848,7 @@ def test_dashboard_screens_match_tz_sections():
     assert DASHBOARD_SCREENS == [
         "Overview",
         "Metric analysis",
+        "Проценты КИР",
         "Group comparison",
         "Poteri relationships",
         "Problem rows",

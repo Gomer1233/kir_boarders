@@ -7,6 +7,7 @@ import yaml
 from scripts.excel_reader import read_excel_loss_safe
 from scripts.merge_data_v3 import merge_route_data
 from scripts.pipeline import assert_audit_invariants, write_route_outputs
+from scripts.kir_percentages import add_kir_percentage_columns
 from scripts.quality_flags import add_quality_flags
 
 
@@ -84,7 +85,7 @@ def run_route(config, route_name):
         route_conf["merge_key"],
         config["columns"]["poteri"]["rename_map"],
     )
-    final_df = add_quality_flags(raw_df)
+    final_df = add_kir_percentage_columns(add_quality_flags(raw_df))
     excluded_df = raw_df.iloc[0:0].copy()
     excluded_df["exclude_reason"] = []
 

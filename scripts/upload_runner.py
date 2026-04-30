@@ -6,6 +6,7 @@ from main_final_v3 import get_route_config
 from scripts.excel_reader import read_excel_loss_safe
 from scripts.merge_data_v3 import merge_route_data
 from scripts.pipeline import assert_audit_invariants, write_route_outputs
+from scripts.kir_percentages import add_kir_percentage_columns
 from scripts.project_registry import PROJECTS_DIR, VALID_ROUTES, project_dir, sanitize_project_name
 from scripts.quality_flags import add_quality_flags
 
@@ -130,7 +131,7 @@ def run_project_route(
         config["columns"]["poteri"]["rename_map"],
     )
     report("quality_flags", f"Adding quality flags for {route_name}.")
-    final_df = add_flags(raw_df)
+    final_df = add_kir_percentage_columns(add_flags(raw_df))
     excluded_df = raw_df.iloc[0:0].copy()
     excluded_df["exclude_reason"] = []
 

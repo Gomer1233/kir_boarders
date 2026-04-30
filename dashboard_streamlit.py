@@ -8,6 +8,14 @@ import re
 import pandas as pd
 
 from main_final_v3 import load_config
+from scripts.kir_percentages import (
+    PERCENT_BASE_COLUMNS,
+    add_kir_percentage_columns,
+    kir_metric_columns,
+    kir_percentage_summary,
+    kir_percentage_columns,
+    percentage_column_name,
+)
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
 from scripts.upload_runner import (
     KIR_SOURCE_NAME,
@@ -46,6 +54,7 @@ RELATIONSHIP_HEADING_COLORS = {
 DASHBOARD_SCREENS = [
     "Overview",
     "Metric analysis",
+    "Проценты КИР",
     "Group comparison",
     "Poteri relationships",
     "Problem rows",
@@ -59,7 +68,8 @@ def _require_streamlit():
 
 
 def get_numeric_metric_columns(df):
-    return df.select_dtypes(include="number").columns.tolist()
+    percentage_columns = set(kir_percentage_columns(df))
+    return [column for column in df.select_dtypes(include="number").columns.tolist() if column not in percentage_columns]
 
 
 def sort_metric_columns(columns):
@@ -458,6 +468,8 @@ def render_metric_analysis_context_html(context):
 
 def metric_unit_for_metric(metric):
     metric_lower = str(metric).lower()
+    if "%" in metric_lower:
+        return "%"
     if "\u0440\u0443\u0431" in metric_lower or "rub" in metric_lower:
         return "\u0440\u0443\u0431"
     if "\u0448\u0442" in metric_lower or "pcs" in metric_lower:
@@ -465,7 +477,7 @@ def metric_unit_for_metric(metric):
     return ""
 
 
-def format_percentile_card(label, item, metric_unit=""):
+def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
     count = f"{int(item['count']):,}"
     share = item.get("share")
     if share is None:
@@ -480,7 +492,7 @@ def format_percentile_card(label, item, metric_unit=""):
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
         "threshold_value": _format_number(item["threshold"]),
         "threshold_unit": metric_unit,
-        "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u041a\u0418\u0420, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
+        "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 {metric_label}, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
     }
 
 
@@ -1076,13 +1088,21 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
         st.warning("merge_diagnostics.md not found for this run.")
 
 
-def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=None):
-    st.subheader("Metric analysis")
-    bin_width_key = f"bin_width_v2_{metric}"
-    hide_zero_key = f"hide_zero_metric_values_{metric}"
-    custom_percentile_key = f"custom_percentile_{metric}"
-    collapse_tail_key = f"collapse_tail_bins_{metric}"
-    tail_bins_key = f"tail_bins_to_keep_{metric}"
+def _render_metric_analysis_tab(
+    filtered,
+    metric,
+    numeric_metric,
+    filter_values=None,
+    title="Metric analysis",
+    key_prefix="metric",
+    metric_label="КИР",
+):
+    st.subheader(title)
+    bin_width_key = f"{key_prefix}_bin_width_v2_{metric}"
+    hide_zero_key = f"{key_prefix}_hide_zero_metric_values_{metric}"
+    custom_percentile_key = f"{key_prefix}_custom_percentile_{metric}"
+    collapse_tail_key = f"{key_prefix}_collapse_tail_bins_{metric}"
+    tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
 
     if bin_width_key not in st.session_state:
         st.session_state[bin_width_key] = default_bin_width(numeric_metric)
@@ -1121,9 +1141,14 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
     for container, card, color in zip(
         [pc1, pc2, pc3],
         [
-            format_percentile_card("Stores <= P25", percentile_counts["p25"], metric_unit=metric_unit),
-            format_percentile_card("Stores >= P85", percentile_counts["p85"], metric_unit=metric_unit),
-            format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"], metric_unit=metric_unit),
+            format_percentile_card("Stores <= P25", percentile_counts["p25"], metric_unit=metric_unit, metric_label=metric_label),
+            format_percentile_card("Stores >= P85", percentile_counts["p85"], metric_unit=metric_unit, metric_label=metric_label),
+            format_percentile_card(
+                f"Stores >= P{custom_percentile}",
+                percentile_counts["custom"],
+                metric_unit=metric_unit,
+                metric_label=metric_label,
+            ),
         ],
         ["#2fbf71", "#ff4d4d", "#f59f00"],
     ):
@@ -1220,6 +1245,53 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
             delta_color="off",
         )
     st.dataframe(bin_table, use_container_width=True)
+
+
+def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
+    st.subheader("Проценты КИР")
+    source = add_kir_percentage_columns(filtered)
+    kir_columns = kir_metric_columns(source)
+    base_columns = [column for column in PERCENT_BASE_COLUMNS if column in source.columns]
+    if not kir_columns:
+        st.info("Нет числовых КИР-показателей для расчета процентов.")
+        return
+    if not base_columns:
+        st.info("Нет колонок Списания, Выручка или Свободный ТЗ для расчета процентов.")
+        return
+
+    default_metric = selected_metric if selected_metric in kir_columns else kir_columns[0]
+    selected_kir = st.selectbox(
+        "КИР-показатель для анализа процентов",
+        kir_columns,
+        index=kir_columns.index(default_metric),
+        key="kir_percent_selected_metric",
+    )
+    selected_base = st.radio(
+        "С чем сравниваем КИР",
+        base_columns,
+        horizontal=True,
+        key="kir_percent_selected_base",
+    )
+    percent_metric = percentage_column_name(selected_kir, selected_base)
+    if percent_metric not in source.columns:
+        st.info(f"Не удалось рассчитать колонку: {percent_metric}")
+        return
+
+    st.caption(f"Формула: {selected_kir} / {selected_base} * 100. Значение 12.5 означает 12.5%.")
+    st.subheader("Сводная таблица по суммам")
+    summary = kir_percentage_summary(source, selected_kir)
+    st.dataframe(summary, use_container_width=True)
+
+    numeric_percent = pd.to_numeric(source[percent_metric], errors="coerce")
+    _render_metric_analysis_tab(
+        source,
+        percent_metric,
+        numeric_percent,
+        filter_values=filter_values,
+        title="Распределение процента по бинам",
+        key_prefix="kir_percent",
+        metric_label="процента КИР",
+    )
 
 
 def _render_group_comparison_tab(filtered, numeric_metric):
@@ -1586,6 +1658,7 @@ def main():
     df = _load_run_dataframe(run_dir)
     if df is None:
         return
+    df = add_kir_percentage_columns(df)
 
     metrics = sort_metric_columns(get_numeric_metric_columns(df))
     if not metrics:
@@ -1635,6 +1708,8 @@ def main():
         _render_audit_tab(run_dir, filtered, numeric_metric)
     elif screen == "Metric analysis":
         _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
+    elif screen == "Проценты КИР":
+        _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
     elif screen == "Group comparison":
         _render_group_comparison_tab(filtered, numeric_metric)
     elif screen == "Poteri relationships":
