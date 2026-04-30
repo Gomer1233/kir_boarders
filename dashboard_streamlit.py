@@ -1116,7 +1116,9 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
         container.markdown(render_percentile_card_html(card, color), unsafe_allow_html=True)
 
     collapse_tail = bool(st.session_state.get(collapse_tail_key, False))
-    with st.expander(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail), expanded=False):
+    st.markdown('<div class="metric-chart-settings-spacer" style="height:18px;"></div>', unsafe_allow_html=True)
+    with st.expander("Настройки графика", expanded=False):
+        st.caption(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail))
         st.checkbox(
             "Hide zero metric values",
             key=hide_zero_key,

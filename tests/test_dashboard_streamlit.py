@@ -862,8 +862,17 @@ def test_metric_analysis_hides_detailed_summary_table_and_moves_chart_settings_b
     stats_table_index = source.index("st.dataframe(pd.DataFrame([summary]), use_container_width=True)")
 
     assert source.rfind("with st.expander(", 0, stats_table_index) > source.index('c5.metric("Zero values"')
-    assert source.index("render_percentile_card_html") < source.index("with st.expander(chart_settings_summary(")
+    assert source.index("render_percentile_card_html") < source.index('with st.expander("Настройки графика", expanded=False):')
     assert source.index('"Hide zero metric values"') > source.index("render_percentile_card_html")
+
+
+def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+    expander_index = source.index('with st.expander("Настройки графика", expanded=False):')
+
+    assert "with st.expander(chart_settings_summary(" not in source
+    assert source.index("metric-chart-settings-spacer") < expander_index
+    assert source.index("st.caption(chart_settings_summary(") > expander_index
 
 
 from dashboard_streamlit import (
