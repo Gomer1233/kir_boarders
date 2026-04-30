@@ -422,7 +422,7 @@ def render_metric_analysis_context_html(context):
         value_text = escape(str(value))
         value_style = "color:#f8fafc;font-size:0.88rem;font-weight:760;"
         if label == "\u041c\u0435\u0442\u0440\u0438\u043a\u0430":
-            value_style += "display:inline-block;max-width:min(560px,72vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;"
+            value_style += "display:inline-block;max-width:min(720px,100%);white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.35;vertical-align:bottom;"
         chip_html_parts.append(
             '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;'
             'border:1px solid rgba(148,163,184,0.28);border-radius:999px;background:rgba(15,23,42,0.35);"'
@@ -660,6 +660,19 @@ def adjust_bin_width(current, delta, minimum=1):
     return max(float(minimum), float(current) + float(delta))
 
 
+def _format_setting_number(value):
+    number = float(value)
+    if number.is_integer():
+        return f"{int(number):,}"
+    return f"{number:,.2f}"
+
+
+def chart_settings_summary(bin_width, custom_percentile, hide_zero_values=False, collapse_tail=False):
+    zero_text = "\u043d\u0443\u043b\u0438 \u0441\u043a\u0440\u044b\u0442\u044b" if hide_zero_values else "\u043d\u0443\u043b\u0438 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
+    tail_text = "\u0445\u0432\u043e\u0441\u0442 \u0441\u0432\u0435\u0440\u043d\u0443\u0442" if collapse_tail else "\u0445\u0432\u043e\u0441\u0442 \u043f\u043e\u043a\u0430\u0437\u0430\u043d"
+    return f"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin {_format_setting_number(bin_width)}, P{int(custom_percentile)}, {zero_text}, {tail_text}"
+
+
 def _adjust_session_bin_width(key, delta):
     st.session_state[key] = adjust_bin_width(st.session_state.get(key, 1), delta)
 
@@ -890,12 +903,23 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
 
 def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=None):
     st.subheader("Metric analysis")
+    bin_width_key = f"bin_width_v2_{metric}"
+    hide_zero_key = f"hide_zero_metric_values_{metric}"
+    custom_percentile_key = f"custom_percentile_{metric}"
+    collapse_tail_key = f"collapse_tail_bins_{metric}"
+    tail_bins_key = f"tail_bins_to_keep_{metric}"
+
+    if bin_width_key not in st.session_state:
+        st.session_state[bin_width_key] = default_bin_width(numeric_metric)
+    if hide_zero_key not in st.session_state:
+        st.session_state[hide_zero_key] = False
+    if custom_percentile_key not in st.session_state:
+        st.session_state[custom_percentile_key] = 50
+    if collapse_tail_key not in st.session_state:
+        st.session_state[collapse_tail_key] = False
+
     original_summary = metric_summary(numeric_metric)
-    hide_zero_values = st.checkbox(
-        "Hide zero metric values",
-        value=False,
-        help="Only affects this Metric analysis screen. Source rows are not changed.",
-    )
+    hide_zero_values = bool(st.session_state.get(hide_zero_key, False))
     if hide_zero_values:
         filtered, numeric_metric = filter_zero_metric_values(filtered, numeric_metric)
 
@@ -909,47 +933,12 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
     if hide_zero_values:
         st.caption(f"Hidden zero rows on this screen: {original_summary['zero_count']:,}")
 
-    stats_df = pd.DataFrame([summary])
-    st.dataframe(stats_df, use_container_width=True)
+    with st.expander("\u041f\u043e\u0434\u0440\u043e\u0431\u043d\u0430\u044f \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430", expanded=False):
+        st.dataframe(pd.DataFrame([summary]), use_container_width=True)
 
-    bin_width_key = f"bin_width_v2_{metric}"
-    if bin_width_key not in st.session_state:
-        st.session_state[bin_width_key] = default_bin_width(numeric_metric)
-    bin_width = st.number_input(
-        "Bin width",
-        min_value=1.0,
-        step=1.0,
-        key=bin_width_key,
-    )
-    step_columns = st.columns(6)
-    for column, (label, delta) in zip(
-        step_columns,
-        [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
-    ):
-        column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
-    custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, value=50)
+    custom_percentile = int(st.session_state.get(custom_percentile_key, 50))
     store_series = filtered[FACTORY_COL] if FACTORY_COL in filtered.columns else None
-    bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
     percentile_counts = percentile_store_counts(numeric_metric, custom_percentile=custom_percentile, store_series=store_series)
-    chart_bin_table = bin_table
-
-    collapse_tail = False
-    if len(bin_table) > 3:
-        collapse_tail = st.checkbox(
-            "Collapse long tail on bin chart",
-            value=False,
-            help="Only affects the chart. The full bin table below stays unchanged.",
-        )
-        if collapse_tail:
-            head_bins = st.number_input(
-                "Bins to keep before tail",
-                min_value=1,
-                max_value=len(bin_table) - 1,
-                value=min(30, len(bin_table) - 1),
-                step=1,
-            )
-            chart_bin_table = collapse_tail_bins(bin_table, head_bins)
-            st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
     st.markdown(render_metric_analysis_context_html(metric_analysis_context(filtered, filter_values or {}, metric=metric)), unsafe_allow_html=True)
     pc1, pc2, pc3 = st.columns(3)
@@ -964,6 +953,51 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
         ["#2fbf71", "#ff4d4d", "#f59f00"],
     ):
         container.markdown(render_percentile_card_html(card, color), unsafe_allow_html=True)
+
+    collapse_tail = bool(st.session_state.get(collapse_tail_key, False))
+    with st.expander(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail), expanded=False):
+        st.checkbox(
+            "Hide zero metric values",
+            key=hide_zero_key,
+            help="Only affects this Metric analysis screen. Source rows are not changed.",
+        )
+        bin_width = st.number_input(
+            "Bin width",
+            min_value=1.0,
+            step=1.0,
+            key=bin_width_key,
+        )
+        step_columns = st.columns(6)
+        for column, (label, delta) in zip(
+            step_columns,
+            [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+        ):
+            column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
+        custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
+
+        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
+        chart_bin_table = bin_table
+        if len(bin_table) > 3:
+            collapse_tail = st.checkbox(
+                "Collapse long tail on bin chart",
+                key=collapse_tail_key,
+                help="Only affects the chart. The full bin table below stays unchanged.",
+            )
+            if collapse_tail:
+                max_tail_bins = len(bin_table) - 1
+                if tail_bins_key not in st.session_state or int(st.session_state[tail_bins_key]) > max_tail_bins:
+                    st.session_state[tail_bins_key] = min(30, max_tail_bins)
+                head_bins = st.number_input(
+                    "Bins to keep before tail",
+                    min_value=1,
+                    max_value=max_tail_bins,
+                    step=1,
+                    key=tail_bins_key,
+                )
+                chart_bin_table = collapse_tail_bins(bin_table, head_bins)
+                st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
+        else:
+            collapse_tail = False
 
     try:
         import plotly.express as px

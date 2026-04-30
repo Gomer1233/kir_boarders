@@ -22,6 +22,7 @@ from dashboard_streamlit import (
     RELATIONSHIP_COLUMNS,
     build_bin_table,
     calculate_relationship_stats,
+    chart_settings_summary,
     collapse_tail_bins,
     filter_zero_metric_values,
     filter_label,
@@ -162,6 +163,23 @@ def test_render_metric_analysis_context_html_is_compact_and_escapes_values():
     assert "Сеть" in html
     assert "ТС ТС Пятерочка" not in html
     assert "analysis-context" in html
+
+
+def test_render_metric_analysis_context_html_wraps_long_metric_names():
+    html = render_metric_analysis_context_html(
+        {
+            "metric": "КИР-950. ТЗ после рег./сезон. Промо с реализацией ниже 60% от прогноза",
+            "scope": "Магазины и Категории",
+            "categories": None,
+            "networks": "ТС Пятерочка",
+        }
+    )
+
+    assert "white-space:normal" in html
+    assert "overflow-wrap:break-word" in html
+    assert "word-break:normal" in html
+    assert "text-overflow:ellipsis" not in html
+    assert "white-space:nowrap" not in html
 
 
 def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
@@ -764,6 +782,15 @@ def test_metric_analysis_does_not_render_boxplot():
     assert "Boxplot:" not in source
 
 
+def test_metric_analysis_hides_detailed_summary_table_and_moves_chart_settings_below_cards():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+    stats_table_index = source.index("st.dataframe(pd.DataFrame([summary]), use_container_width=True)")
+
+    assert source.rfind("with st.expander(", 0, stats_table_index) > source.index('c5.metric("Zero values"')
+    assert source.index("render_percentile_card_html") < source.index("with st.expander(chart_settings_summary(")
+    assert source.index('"Hide zero metric values"') > source.index("render_percentile_card_html")
+
+
 from dashboard_streamlit import (
     adjust_bin_width,
     build_bin_table_by_width,
@@ -797,6 +824,15 @@ def test_adjust_bin_width_uses_explicit_button_steps_and_never_goes_below_minimu
     assert adjust_bin_width(100, 10) == 110
     assert adjust_bin_width(100, -10) == 90
     assert adjust_bin_width(5, -10) == 1
+
+
+def test_chart_settings_summary_is_compact_and_business_readable():
+    assert chart_settings_summary(1000.0, 40, hide_zero_values=False, collapse_tail=True) == (
+        "Настройки графика: bin 1,000, P40, нули показаны, хвост свернут"
+    )
+    assert chart_settings_summary(250.5, 85, hide_zero_values=True, collapse_tail=False) == (
+        "Настройки графика: bin 250.50, P85, нули скрыты, хвост показан"
+    )
 
 
 def test_percentile_store_counts_counts_low_p25_and_high_upper_thresholds():
