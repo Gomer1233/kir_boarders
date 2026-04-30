@@ -26,6 +26,7 @@ from dashboard_streamlit import (
     render_percentile_card_html,
     get_numeric_metric_columns,
     filter_options_for_column,
+    group_comparison_tables,
     route_label,
     list_project_run_dirs,
     latest_project_run_name,
@@ -77,8 +78,9 @@ def test_factory_is_not_a_sidebar_filter():
     assert FACTORY_COL not in FILTER_COLUMNS
 
 
-def test_factory_can_still_be_used_for_grouping():
-    assert FACTORY_COL in GROUP_COLUMNS
+def test_factory_is_not_available_for_grouping():
+    assert GROUP_COLUMNS == [TS_COL, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"]
+    assert FACTORY_COL not in GROUP_COLUMNS
 
 
 def test_metric_summary_contains_tz_statistics():
@@ -239,6 +241,37 @@ def test_build_bin_table_counts_rows_per_interval():
     assert table["count"].tolist() == [3, 2]
     assert round(table["share"].sum(), 6) == 1.0
     assert {"bin", "count", "share"}.issubset(table.columns)
+
+
+def test_group_comparison_tables_split_categories_by_ts_when_multiple_networks_selected():
+    df = pd.DataFrame(
+        {
+            TS_COL: ["Perek", "Perek", "Pyater", "Pyater"],
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A", "A", "B"],
+        }
+    )
+    metric = pd.Series([10, 30, 100, 200])
+
+    tables = group_comparison_tables(df, metric, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f")
+
+    assert [name for name, _ in tables] == ["Perek", "Pyater"]
+    perek = tables[0][1]
+    pyater = tables[1][1]
+    assert perek["\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"].tolist() == ["A"]
+    assert perek["count"].tolist() == [2]
+    assert perek["mean"].tolist() == [20.0]
+    assert pyater["\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"].tolist() == ["A", "B"]
+
+
+def test_group_comparison_tables_keep_single_table_for_ts_grouping():
+    df = pd.DataFrame({TS_COL: ["Perek", "Pyater"], "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A"]})
+    metric = pd.Series([10, 20])
+
+    tables = group_comparison_tables(df, metric, TS_COL)
+
+    assert len(tables) == 1
+    assert tables[0][0] is None
+    assert tables[0][1][TS_COL].tolist() == ["Perek", "Pyater"]
 
 
 def test_relationship_columns_are_detected_from_final_data():

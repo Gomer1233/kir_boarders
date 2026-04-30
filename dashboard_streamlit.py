@@ -35,7 +35,7 @@ REVENUE_COL = "\u0412\u044b\u0440\u0443\u0447\u043a\u0430"
 FREE_STOCK_COL = "\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0439 \u0422\u0417"
 
 FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_status"]
-GROUP_COLUMNS = [TS_COL, CATEGORY_COL, FACTORY_COL]
+GROUP_COLUMNS = [TS_COL, CATEGORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
 PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
 RELATIONSHIP_HEADING_COLORS = {
@@ -433,6 +433,24 @@ def network_brand_html(network_name):
         '</div>'
         '</div>'
     )
+
+
+def group_summary_table(chart_data, group_col):
+    return (
+        chart_data.groupby(group_col, dropna=False)["_metric"]
+        .agg(count="count", mean="mean", median="median", min="min", max="max", p85=lambda value: value.quantile(0.85), total="sum")
+        .reset_index()
+        .sort_values("count", ascending=False)
+    )
+
+
+def group_comparison_tables(filtered, numeric_metric, group_col):
+    chart_data = filtered.assign(_metric=numeric_metric)
+    if group_col == CATEGORY_COL and TS_COL in chart_data.columns:
+        networks = split_by_network(chart_data)
+        if len(networks) > 1:
+            return [(network_name, group_summary_table(network_df, group_col)) for network_name, network_df in networks]
+    return [(None, group_summary_table(chart_data, group_col))]
 
 
 def collapse_tail_bins(bin_table, head_bins):
@@ -883,20 +901,16 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
 
 def _render_group_comparison_tab(filtered, numeric_metric):
     st.subheader("Group comparison")
-    chart_data = filtered.assign(_metric=numeric_metric)
     group_options = [column for column in GROUP_COLUMNS if column in filtered.columns]
     if not group_options:
         st.info("No group columns found.")
         return
 
     group_col = st.selectbox("Group by", group_options)
-    grouped = (
-        chart_data.groupby(group_col, dropna=False)["_metric"]
-        .agg(count="count", mean="mean", median="median", min="min", max="max", p85=lambda value: value.quantile(0.85), total="sum")
-        .reset_index()
-        .sort_values("count", ascending=False)
-    )
-    st.dataframe(grouped.head(1000), use_container_width=True)
+    for network_name, grouped in group_comparison_tables(filtered, numeric_metric, group_col):
+        if network_name is not None:
+            st.markdown(network_brand_html(network_name), unsafe_allow_html=True)
+        st.dataframe(grouped.head(1000), use_container_width=True)
 
 
 def _render_relationships_tab(filtered, metric, numeric_metric):
