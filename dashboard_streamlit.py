@@ -208,7 +208,8 @@ def pipeline_status_text(status):
         "stale_lock": "\u041d\u0430\u0439\u0434\u0435\u043d lock-\u0444\u0430\u0439\u043b \u043f\u0440\u0435\u0434\u044b\u0434\u0443\u0449\u0435\u0433\u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0430. \u0415\u0441\u043b\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043f\u0440\u043e\u0433\u043e\u043d \u043d\u0435 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f, \u0441\u0431\u0440\u043e\u0441\u044c\u0442\u0435 lock, \u0447\u0442\u043e\u0431\u044b \u0441\u043d\u043e\u0432\u0430 \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443 \u0444\u0430\u0439\u043b\u043e\u0432.",
         "reset_lock_button": "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0437\u0430\u0432\u0438\u0441\u0448\u0438\u0439 lock",
         "finished": "\u041f\u0440\u043e\u0433\u043e\u043d \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d.",
-        "open_after_both_label": "\u041f\u043e\u0441\u043b\u0435 Run Both \u043e\u0442\u043a\u0440\u044b\u0442\u044c:",
+        "open_after_both_label": "\u0427\u0442\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0441\u043b\u0435 Run Both routes:",
+        "open_after_both_help": "\u041d\u0435 \u0444\u0438\u043b\u044c\u0442\u0440: \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u043a\u043d\u043e\u043f\u043a\u0443 Run Both routes.",
     }
     return texts[status]
 
@@ -1122,6 +1123,15 @@ def main():
         with st.sidebar.expander("2. Run pipeline", expanded=project_is_running):
             if project_is_running:
                 st.info(pipeline_status_text("already_running"))
+            open_after_both = st.radio(
+                pipeline_status_text("open_after_both_label"),
+                ["route_1", "route_2"],
+                format_func=route_label,
+                horizontal=True,
+                key="open_route_after_both",
+                disabled=project_is_running,
+            )
+            st.caption(pipeline_status_text("open_after_both_help"))
             st.button(
                 f"Run {route_label('route_1')}",
                 disabled=project_is_running,
@@ -1133,13 +1143,6 @@ def main():
                 disabled=project_is_running,
                 on_click=queue_pipeline_run,
                 args=(selected_project, ["route_2"], "route_2"),
-            )
-            open_after_both = st.selectbox(
-                pipeline_status_text("open_after_both_label"),
-                ["route_1", "route_2"],
-                format_func=route_label,
-                key="open_route_after_both",
-                disabled=project_is_running,
             )
             st.button(
                 f"Run {route_label('both')}",
