@@ -841,7 +841,7 @@ def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
     assert [call for call in calls if call[0] == "read"] == [("read", str(path), 123)]
 
 
-from dashboard_streamlit import DASHBOARD_SCREENS, sample_for_plot
+from dashboard_streamlit import DASHBOARD_SCREENS, build_bin_table_by_width, default_bin_width, sample_for_plot
 
 
 def test_dashboard_screens_match_tz_sections():
@@ -863,6 +863,24 @@ def test_sample_for_plot_limits_large_dataframes():
 
     assert len(sampled) == 10
     assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+
+
+def test_default_bin_width_can_ignore_extreme_percent_tail():
+    series = pd.Series([0.0, 0.1, 0.2, 0.5, 1.0, 2.0] * 100 + [30000.0])
+
+    width = default_bin_width(series, minimum=0.01, maximum=5.0, upper_quantile=0.99)
+
+    assert 0.01 <= width <= 1.0
+
+
+def test_build_bin_table_by_width_caps_huge_bin_counts_with_tail():
+    series = pd.Series([0.0, 0.1, 0.2, 10000.0])
+
+    table = build_bin_table_by_width(series, bin_width=0.1, max_bins=10)
+
+    assert len(table) == 10
+    assert table.iloc[-1]["bin"].startswith("Tail:")
+    assert table.iloc[-1]["count"] == 1
 
 
 def test_metric_analysis_does_not_render_boxplot():

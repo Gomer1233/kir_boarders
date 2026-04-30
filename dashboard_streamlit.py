@@ -631,7 +631,7 @@ def build_bin_table(series, bins=20):
     return table
 
 
-def build_bin_table_by_width(series, bin_width, store_series=None):
+def build_bin_table_by_width(series, bin_width, store_series=None, max_bins=2000):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return pd.DataFrame(columns=["bin_start", "bin_end", "bin", "count", "store_count", "share"])
@@ -644,18 +644,28 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
     max_value = float(numeric.max())
     start = (min_value // bin_width) * bin_width
     end = ((max_value // bin_width) + 1) * bin_width
-    edges = list(_frange(start, end + bin_width, bin_width))
+    bin_count = int(math.ceil((end - start) / bin_width))
+    has_tail = bin_count > int(max_bins)
+    if has_tail:
+        regular_bin_count = max(int(max_bins) - 1, 1)
+        tail_start = start + regular_bin_count * bin_width
+        edges = [start + index * bin_width for index in range(regular_bin_count + 1)]
+    else:
+        tail_start = None
+        edges = [start + index * bin_width for index in range(bin_count + 1)]
     source = pd.DataFrame({"metric": pd.to_numeric(series, errors="coerce")})
     if store_series is not None:
         source["store"] = store_series
     source = source.dropna(subset=["metric"])
-    source["bin_interval"] = pd.cut(source["metric"], bins=edges, right=False, include_lowest=True)
-    counts = source["bin_interval"].value_counts(sort=False)
+    regular_source = source[source["metric"].lt(tail_start)].copy() if has_tail else source
+    source_for_cut = regular_source if has_tail else source
+    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True)
+    counts = source_for_cut["bin_interval"].value_counts(sort=False)
 
     rows = []
-    total = int(counts.sum())
+    total = int(len(source))
     for interval, count in counts.items():
-        bin_rows = source[source["bin_interval"] == interval]
+        bin_rows = source_for_cut[source_for_cut["bin_interval"] == interval]
         store_count = int(bin_rows["store"].nunique()) if "store" in bin_rows.columns else int(count)
         rows.append(
             {
@@ -667,23 +677,73 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
                 "share": float(count / total) if total else 0,
             }
         )
+    if has_tail:
+        tail = source[source["metric"].ge(tail_start)]
+        tail_count = int(len(tail))
+        tail_store_count = int(tail["store"].nunique()) if "store" in tail.columns else tail_count
+        rows.append(
+            {
+                "bin_start": _clean_number(tail_start),
+                "bin_end": _clean_number(max_value),
+                "bin": f"Tail: >= {_clean_number(tail_start)}",
+                "count": tail_count,
+                "store_count": tail_store_count,
+                "share": float(tail_count / total) if total else 0,
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def default_bin_width(series, target_bins=30, minimum=1, maximum=1000):
+def _nice_width(raw_width):
+    if raw_width <= 0:
+        return 1.0
+    exponent = math.floor(math.log10(raw_width))
+    scale = 10**exponent
+    normalized = raw_width / scale
+    if normalized <= 1:
+        multiplier = 1
+    elif normalized <= 2:
+        multiplier = 2
+    elif normalized <= 5:
+        multiplier = 5
+    else:
+        multiplier = 10
+    return multiplier * scale
+
+
+def default_bin_width(series, target_bins=30, minimum=1, maximum=1000, upper_quantile=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return float(minimum)
-    span = float(numeric.max() - numeric.min())
+    upper = numeric.quantile(float(upper_quantile)) if upper_quantile is not None else numeric.max()
+    span = float(upper - numeric.min())
     raw_width = span / target_bins
     if raw_width <= minimum:
         return float(minimum)
-    nice_width = 10 ** math.ceil(math.log10(raw_width))
+    nice_width = _nice_width(raw_width) if upper_quantile is not None else 10 ** math.ceil(math.log10(raw_width))
     return float(min(max(nice_width, float(minimum)), float(maximum)))
 
 
 def adjust_bin_width(current, delta, minimum=1):
     return max(float(minimum), float(current) + float(delta))
+
+
+def bin_width_settings(is_percent_metric=False):
+    if is_percent_metric:
+        return {
+            "minimum": 0.01,
+            "maximum": 5.0,
+            "step": 0.01,
+            "buttons": [("-0.01", -0.01), ("+0.01", 0.01), ("-0.1", -0.1), ("+0.1", 0.1), ("-1", -1), ("+1", 1)],
+            "upper_quantile": 0.99,
+        }
+    return {
+        "minimum": 1.0,
+        "maximum": 1000.0,
+        "step": 1.0,
+        "buttons": [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+        "upper_quantile": None,
+    }
 
 
 def _format_setting_number(value):
@@ -1096,6 +1156,7 @@ def _render_metric_analysis_tab(
     title="Metric analysis",
     key_prefix="metric",
     metric_label="КИР",
+    is_percent_metric=False,
 ):
     st.subheader(title)
     bin_width_key = f"{key_prefix}_bin_width_v2_{metric}"
@@ -1103,9 +1164,15 @@ def _render_metric_analysis_tab(
     custom_percentile_key = f"{key_prefix}_custom_percentile_{metric}"
     collapse_tail_key = f"{key_prefix}_collapse_tail_bins_{metric}"
     tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
+    width_settings = bin_width_settings(is_percent_metric=is_percent_metric)
 
     if bin_width_key not in st.session_state:
-        st.session_state[bin_width_key] = default_bin_width(numeric_metric)
+        st.session_state[bin_width_key] = default_bin_width(
+            numeric_metric,
+            minimum=width_settings["minimum"],
+            maximum=width_settings["maximum"],
+            upper_quantile=width_settings["upper_quantile"],
+        )
     if hide_zero_key not in st.session_state:
         st.session_state[hide_zero_key] = False
     if custom_percentile_key not in st.session_state:
@@ -1165,19 +1232,20 @@ def _render_metric_analysis_tab(
         )
         bin_width = st.number_input(
             "Bin width",
-            min_value=1.0,
-            step=1.0,
+            min_value=width_settings["minimum"],
+            step=width_settings["step"],
             key=bin_width_key,
         )
         step_columns = st.columns(6)
         for column, (label, delta) in zip(
             step_columns,
-            [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+            width_settings["buttons"],
         ):
             column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
         custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
 
-        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
+        max_bin_count = 500 if is_percent_metric else 2000
+        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
         chart_bin_table = bin_table
         if len(bin_table) > 3:
             collapse_tail = st.checkbox(
@@ -1291,6 +1359,7 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
         title="Распределение процента по бинам",
         key_prefix="kir_percent",
         metric_label="процента КИР",
+        is_percent_metric=True,
     )
 
 
