@@ -368,12 +368,25 @@ def apply_filter_values(df, filter_values):
     return filtered
 
 
-def format_percentile_card(label, item):
+def metric_unit_for_metric(metric):
+    metric_lower = str(metric).lower()
+    if "\u0440\u0443\u0431" in metric_lower or "rub" in metric_lower:
+        return "\u0440\u0443\u0431"
+    if "\u0448\u0442" in metric_lower or "pcs" in metric_lower:
+        return "\u0448\u0442"
+    return ""
+
+
+def format_percentile_card(label, item, metric_unit=""):
+    count = f"{int(item['count']):,}"
+    direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
     return {
         "label": label,
-        "count": f"{int(item['count']):,}",
+        "count": count,
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
         "threshold_value": _format_number(item["threshold"]),
+        "threshold_unit": metric_unit,
+        "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u041a\u0418\u0420, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
     }
 
 
@@ -382,6 +395,9 @@ def render_percentile_card_html(card, color):
     count = escape(str(card["count"]))
     threshold_label = escape(str(card["threshold_label"]))
     threshold_value = escape(str(card["threshold_value"]))
+    threshold_unit = escape(str(card.get("threshold_unit", "")))
+    threshold_help = escape(str(card.get("threshold_help", "")), quote=True)
+    threshold_display = f"{threshold_value} {threshold_unit}".strip()
     color = escape(str(color))
     return f"""
     <div style="
@@ -396,7 +412,14 @@ def render_percentile_card_html(card, color):
         <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
         <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">{count}</div>
         <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
-            {threshold_label}: <span style="color:{color};font-weight:850;">{threshold_value}</span>
+            {threshold_label}
+            <span class="info-icon" title="{threshold_help}" style="
+                display:inline-flex;align-items:center;justify-content:center;
+                width:15px;height:15px;margin:0 5px;border-radius:50%;
+                border:1px solid rgba(255,255,255,0.38);color:rgba(255,255,255,0.78);
+                font-size:0.68rem;font-weight:800;cursor:help;
+            ">i</span>
+            <span style="color:{color};font-weight:850;">{threshold_display}</span>
         </div>
     </div>
     """
@@ -846,12 +869,13 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric):
             st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
 
     pc1, pc2, pc3 = st.columns(3)
+    metric_unit = metric_unit_for_metric(metric)
     for container, card, color in zip(
         [pc1, pc2, pc3],
         [
-            format_percentile_card("Stores <= P25", percentile_counts["p25"]),
-            format_percentile_card("Stores >= P85", percentile_counts["p85"]),
-            format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"]),
+            format_percentile_card("Stores <= P25", percentile_counts["p25"], metric_unit=metric_unit),
+            format_percentile_card("Stores >= P85", percentile_counts["p85"], metric_unit=metric_unit),
+            format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"], metric_unit=metric_unit),
         ],
         ["#2fbf71", "#ff4d4d", "#f59f00"],
     ):

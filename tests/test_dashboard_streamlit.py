@@ -32,6 +32,7 @@ from dashboard_streamlit import (
     latest_project_run_name,
     load_upload_manifest,
     make_pipeline_run_request,
+    metric_unit_for_metric,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -127,13 +128,40 @@ def test_apply_filter_values_filters_only_selected_columns():
 
 
 def test_format_percentile_card_separates_count_from_threshold():
-    card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33})
+    card = format_percentile_card("Stores >= P85", {"count": 21140, "threshold": 4197.33}, metric_unit="руб")
 
-    assert card == {"label": "Stores >= P85", "count": "21,140", "threshold_label": "Порог метрики", "threshold_value": "4,197.33"}
+    assert card == {
+        "label": "Stores >= P85",
+        "count": "21,140",
+        "threshold_label": "Порог метрики",
+        "threshold_value": "4,197.33",
+        "threshold_unit": "руб",
+        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
+    }
+
+
+def test_format_percentile_card_explains_lower_threshold_direction():
+    card = format_percentile_card("Stores <= P25", {"count": 6498, "threshold": 0}, metric_unit="шт")
+
+    assert card["threshold_unit"] == "шт"
+    assert card["threshold_help"] == "Это значение КИР, ниже или равно которому находится 6,498 магазинов."
+
+
+def test_metric_unit_for_metric_detects_rubles_and_units():
+    assert metric_unit_for_metric("КИР-950, руб. без НДС") == "руб"
+    assert metric_unit_for_metric("КИР-950, шт") == "шт"
+    assert metric_unit_for_metric("КИР-950") == ""
 
 
 def test_render_percentile_card_html_includes_soft_percentile_color():
-    card = {"label": "Stores >= P85", "count": "21,140", "threshold_label": "Порог метрики", "threshold_value": "4,197.33"}
+    card = {
+        "label": "Stores >= P85",
+        "count": "21,140",
+        "threshold_label": "Порог метрики",
+        "threshold_value": "4,197.33",
+        "threshold_unit": "руб",
+        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
+    }
 
     html = render_percentile_card_html(card, "#ff4d4d")
 
@@ -141,7 +169,9 @@ def test_render_percentile_card_html_includes_soft_percentile_color():
     assert "21,140" in html
     assert "Порог метрики" in html
     assert "Threshold" not in html
-    assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33</span>' in html
+    assert "info-icon" in html
+    assert 'title="Это значение КИР, выше или равно которому находится 21,140 магазинов."' in html
+    assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33 руб</span>' in html
     assert "#ff4d4d" in html
 
 
