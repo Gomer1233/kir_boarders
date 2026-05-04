@@ -987,6 +987,7 @@ from dashboard_streamlit import (
     percentile_store_counts,
     prepare_correlation_display_stats,
     split_by_network,
+    resolve_kir_percent_settings,
 )
 
 
@@ -1137,6 +1138,28 @@ def test_set_session_value_updates_target_key(monkeypatch):
     set_session_value("bin_width", 947.76)
 
     assert fake_state["bin_width"] == 947.76
+
+
+def test_resolve_kir_percent_settings_keeps_valid_applied_values():
+    result = resolve_kir_percent_settings(
+        {"metric": "КИР-2", "base": "Выручка"},
+        ["КИР-1", "КИР-2"],
+        ["Списания", "Выручка"],
+        default_metric="КИР-1",
+    )
+
+    assert result == {"metric": "КИР-2", "base": "Выручка"}
+
+
+def test_resolve_kir_percent_settings_falls_back_when_applied_values_are_missing():
+    result = resolve_kir_percent_settings(
+        {"metric": "missing", "base": "missing"},
+        ["КИР-1", "КИР-2"],
+        ["Списания", "Выручка"],
+        default_metric="КИР-2",
+    )
+
+    assert result == {"metric": "КИР-2", "base": "Списания"}
 
 
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():

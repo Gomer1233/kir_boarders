@@ -1424,18 +1424,30 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
         return
 
     default_metric = selected_metric if selected_metric in kir_columns else kir_columns[0]
-    selected_kir = st.selectbox(
-        "КИР-показатель для анализа процентов",
+    applied_settings = resolve_kir_percent_settings(
+        st.session_state.get("kir_percent_settings"),
         kir_columns,
-        index=kir_columns.index(default_metric),
-        key="kir_percent_selected_metric",
-    )
-    selected_base = st.radio(
-        "С чем сравниваем КИР",
         base_columns,
-        horizontal=True,
-        key="kir_percent_selected_base",
+        default_metric,
     )
+    with st.form("kir_percent_settings_form"):
+        draft_kir = st.selectbox(
+            "КИР-показатель для анализа процентов",
+            kir_columns,
+            index=kir_columns.index(applied_settings["metric"]),
+        )
+        draft_base = st.radio(
+            "С чем сравниваем КИР",
+            base_columns,
+            horizontal=True,
+            index=base_columns.index(applied_settings["base"]),
+        )
+        if st.form_submit_button("Apply percentage settings"):
+            applied_settings = {"metric": draft_kir, "base": draft_base}
+            st.session_state["kir_percent_settings"] = applied_settings
+
+    selected_kir = applied_settings["metric"]
+    selected_base = applied_settings["base"]
     percent_metric = percentage_column_name(selected_kir, selected_base)
     if percent_metric not in source.columns:
         st.info(f"Не удалось рассчитать колонку: {percent_metric}")
@@ -1584,6 +1596,16 @@ def format_kir_summary_display(summary):
         if str(column).startswith("КИР / ") and str(column).endswith(", %"):
             display[column] = display[column].map(format_kir_summary_percent)
     return display
+
+
+def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_metric):
+    metric = (settings or {}).get("metric")
+    base = (settings or {}).get("base")
+    if metric not in kir_columns:
+        metric = default_metric if default_metric in kir_columns else kir_columns[0]
+    if base not in base_columns:
+        base = base_columns[0]
+    return {"metric": metric, "base": base}
 
 
 def main():
