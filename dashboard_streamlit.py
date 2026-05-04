@@ -770,6 +770,10 @@ def _adjust_session_bin_width(key, delta, minimum=1):
     st.session_state[key] = adjust_bin_width(st.session_state.get(key, minimum), delta, minimum=minimum)
 
 
+def set_session_value(key, value):
+    st.session_state[key] = value
+
+
 def first_bins_store_sum(bin_table, n_bins):
     if bin_table.empty:
         return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
@@ -1377,9 +1381,14 @@ def _render_metric_analysis_tab(
             if previous_bins:
                 st.caption(f"Previous {n_bins - 1} bins cover {previous_bins['store_share']:.1%} of stores.")
             if recommended_width is not None:
-                st.info(
-                    f"Approx. recommended bin width for this target: {_format_setting_number(recommended_width)}. "
-                    "Set this in chart settings above, then re-check the actual store share here."
+                rec_col, apply_col = st.columns([3, 1])
+                rec_col.info(f"Recommended bin width for this target: {_format_setting_number(recommended_width)}")
+                apply_col.button(
+                    "Apply bin width",
+                    key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
+                    on_click=set_session_value,
+                    args=(bin_width_key, recommended_width),
+                    help="Applies the recommended value to Bin width in chart settings.",
                 )
         else:
             n_bins = st.number_input(
