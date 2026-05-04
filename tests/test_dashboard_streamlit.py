@@ -977,6 +977,7 @@ from dashboard_streamlit import (
     build_bin_table_by_width,
     default_bin_width,
     filter_visual_outliers,
+    first_bin_count_for_target_share,
     first_bins_store_sum,
     first_bins_summary,
     relationship_chart_rows,
@@ -1107,6 +1108,14 @@ def test_first_bins_store_sum_clamps_requested_bin_count_to_table_size():
     result = first_bins_store_sum(table, 10)
 
     assert result == {"bins_used": 2, "store_sum": 150, "row_sum": 150}
+
+
+def test_first_bin_count_for_target_share_returns_minimum_bins_covering_share():
+    table = pd.DataFrame({"count": [100, 50, 25], "store_count": [10, 5, 2]})
+
+    assert first_bin_count_for_target_share(table, 0.70) == 2
+    assert first_bin_count_for_target_share(table, 1.00) == 3
+    assert first_bin_count_for_target_share(table, 0) == 1
 
 
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():

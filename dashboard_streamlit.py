@@ -784,6 +784,23 @@ def first_bins_store_sum(bin_table, n_bins):
     }
 
 
+def first_bin_count_for_target_share(bin_table, target_share):
+    if bin_table.empty:
+        return 0
+    store_column = "store_count" if "store_count" in bin_table.columns else "count"
+    counts = pd.to_numeric(bin_table[store_column], errors="coerce").fillna(0)
+    total = float(counts.sum())
+    if total <= 0:
+        return 0
+    target_share = min(max(float(target_share), 0.0), 1.0)
+    target_count = total * target_share
+    cumulative = counts.cumsum()
+    matching = cumulative[cumulative.ge(target_count)]
+    if matching.empty:
+        return int(len(bin_table))
+    return int(matching.index[0]) + 1
+
+
 def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):
     if bin_table.empty:
         return {"bins_used": 0, "store_sum": 0, "total_stores": 0, "store_share": 0}
@@ -1314,7 +1331,32 @@ def _render_metric_analysis_tab(
     st.subheader("Bin table")
     if not bin_table.empty:
         max_bins = len(bin_table)
-        n_bins = st.number_input("Sum first N bins", min_value=1, max_value=max_bins, value=min(3, max_bins), step=1)
+        sum_mode = st.radio(
+            "How to choose first bins",
+            ["By bin count", "By store share"],
+            horizontal=True,
+            key=f"{key_prefix}_first_bins_mode_{metric}",
+        )
+        if sum_mode == "By store share":
+            target_share_percent = st.number_input(
+                "Target % of stores",
+                min_value=0.1,
+                max_value=100.0,
+                value=30.0,
+                step=0.1,
+                key=f"{key_prefix}_first_bins_target_share_{metric}",
+            )
+            n_bins = first_bin_count_for_target_share(bin_table, target_share_percent / 100)
+            st.caption(f"Minimum first bins covering at least {target_share_percent:.1f}% of stores: {n_bins}")
+        else:
+            n_bins = st.number_input(
+                "Sum first N bins",
+                min_value=1,
+                max_value=max_bins,
+                value=min(3, max_bins),
+                step=1,
+                key=f"{key_prefix}_first_bins_count_{metric}",
+            )
         first_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
         sum_col1, sum_col2 = st.columns(2)
         sum_col1.metric("First bins used", first_bins["bins_used"])
