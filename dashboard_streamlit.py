@@ -468,13 +468,16 @@ def render_metric_analysis_context_html(context):
 
 
 def metric_unit_for_metric(metric):
-    metric_lower = str(metric).lower()
-    if "%" in metric_lower:
+    metric_text = str(metric).strip()
+    metric_lower = metric_text.lower()
+    if " / " in metric_lower and metric_lower.endswith("%"):
         return "%"
     if "\u0440\u0443\u0431" in metric_lower or "rub" in metric_lower:
         return "\u0440\u0443\u0431"
     if "\u0448\u0442" in metric_lower or "pcs" in metric_lower:
         return "\u0448\u0442"
+    if "%" in metric_lower:
+        return "%"
     return ""
 
 

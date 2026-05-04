@@ -255,6 +255,9 @@ def test_format_percentile_card_for_percent_metric_uses_business_percent_format(
 def test_metric_unit_for_metric_detects_rubles_and_units():
     assert metric_unit_for_metric("КИР-950, руб. без НДС") == "руб"
     assert metric_unit_for_metric("КИР-950, шт") == "шт"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, руб. без НДС") == "руб"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, шт") == "шт"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, руб. без НДС / Выручка, %") == "%"
     assert metric_unit_for_metric("КИР-950") == ""
 
 
