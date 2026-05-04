@@ -845,6 +845,8 @@ from dashboard_streamlit import (
     DASHBOARD_SCREENS,
     build_bin_table_by_width,
     default_bin_width,
+    format_kir_summary_amount,
+    format_kir_summary_display,
     prepare_bin_chart_table,
     sample_for_plot,
 )
@@ -902,6 +904,31 @@ def test_prepare_bin_chart_table_draws_tail_as_compact_bar():
 
     assert chart.loc[2, "bar_width"] == 1.0
     assert chart.loc[2, "bin_mid"] == 2.5
+
+
+def test_format_kir_summary_display_formats_amounts_without_decimals():
+    summary = pd.DataFrame(
+        {
+            "Категория": ["Бакалея", None],
+            "Сумма КИР": [1936376253.9925, None],
+            "Сумма списаний": [295312091.9, None],
+            "КИР / Списания, %": [264.8659, None],
+            "Сумма выручки": [34933625180.27, None],
+        }
+    )
+
+    display = format_kir_summary_display(summary)
+
+    assert display.loc[0, "Сумма КИР"] == "1 936 376 254"
+    assert display.loc[0, "Сумма списаний"] == "295 312 092"
+    assert display.loc[0, "Сумма выручки"] == "34 933 625 180"
+    assert display.loc[1, "Сумма КИР"] == ""
+    assert display.loc[0, "КИР / Списания, %"] == 264.8659
+
+
+def test_format_kir_summary_amount_handles_empty_values():
+    assert format_kir_summary_amount(None) == ""
+    assert format_kir_summary_amount(float("nan")) == ""
 
 
 def test_metric_analysis_does_not_render_boxplot():

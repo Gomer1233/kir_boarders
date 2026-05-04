@@ -46,6 +46,7 @@ FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_s
 GROUP_COLUMNS = [TS_COL, CATEGORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
 PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
+KIR_SUMMARY_AMOUNT_COLUMNS = ["Сумма КИР", "Сумма списаний", "Сумма выручки", "Сумма свободного ТЗ"]
 RELATIONSHIP_HEADING_COLORS = {
     WRITEOFFS_COL: {"accent": "#fb923c", "background": "rgba(251, 146, 60, 0.18)"},
     REVENUE_COL: {"accent": "#4ade80", "background": "rgba(74, 222, 128, 0.16)"},
@@ -1354,7 +1355,7 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
     st.caption(f"Формула: {selected_kir} / {selected_base} * 100. Значение 12.5 означает 12.5%.")
     st.subheader("Сводная таблица по суммам")
     summary = kir_percentage_summary(source, selected_kir)
-    st.dataframe(summary, use_container_width=True)
+    st.dataframe(format_kir_summary_display(summary), use_container_width=True)
 
     numeric_percent = pd.to_numeric(source[percent_metric], errors="coerce")
     _render_metric_analysis_tab(
@@ -1471,6 +1472,20 @@ def _format_number(value):
     if value is None or pd.isna(value):
         return "n/a"
     return f"{value:,.2f}"
+
+
+def format_kir_summary_amount(value):
+    if value is None or pd.isna(value):
+        return ""
+    return f"{float(value):,.0f}".replace(",", " ")
+
+
+def format_kir_summary_display(summary):
+    display = summary.copy()
+    for column in KIR_SUMMARY_AMOUNT_COLUMNS:
+        if column in display.columns:
+            display[column] = display[column].map(format_kir_summary_amount)
+    return display
 
 
 def main():
