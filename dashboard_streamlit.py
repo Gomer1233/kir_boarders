@@ -481,6 +481,31 @@ def metric_unit_for_metric(metric):
     return ""
 
 
+def dashboard_css():
+    return """
+<style>
+.stSelectbox div[data-baseweb="select"] > div {
+    height: auto;
+    min-height: 50px;
+    align-items: flex-start;
+}
+.stSelectbox div[data-baseweb="select"] div[role="combobox"],
+.stSelectbox div[data-baseweb="select"] div[role="combobox"] > div,
+.stSelectbox div[data-baseweb="select"] span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-overflow: clip;
+    line-height: 1.28;
+}
+.stSelectbox div[data-baseweb="select"] div[role="combobox"] {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+</style>
+"""
+
+
 def format_percentile_card(label, item, metric_unit="", metric_label="\u041a\u0418\u0420"):
     count_for_sentence = f"{int(item['count']):,}".replace(",", " ")
     total_count = int(item.get("total_count", 0))
@@ -1636,6 +1661,7 @@ def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_me
 def main():
     _require_streamlit()
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
+    st.markdown(dashboard_css(), unsafe_allow_html=True)
     st.title("KIR Dashboard")
 
     is_running = st.session_state.get("pipeline_running", False)

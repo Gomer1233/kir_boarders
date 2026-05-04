@@ -19,6 +19,7 @@ from dashboard_streamlit import (
     pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
+    dashboard_css,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
@@ -185,6 +186,17 @@ def test_render_metric_analysis_context_html_wraps_long_metric_names():
     assert "word-break:normal" in html
     assert "text-overflow:ellipsis" not in html
     assert "white-space:nowrap" not in html
+
+
+def test_dashboard_css_wraps_long_selectbox_values():
+    css = dashboard_css()
+
+    assert ".stSelectbox" in css
+    assert "white-space: normal" in css
+    assert "overflow-wrap: anywhere" in css
+    assert "text-overflow: clip" in css
+    assert "height: auto" in css
+    assert "text-overflow: ellipsis" not in css
 
 
 def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
