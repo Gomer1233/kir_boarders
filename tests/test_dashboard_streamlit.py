@@ -198,6 +198,10 @@ def test_dashboard_css_wraps_long_selectbox_values():
     assert 'data-testid="stSidebar"' in css
     assert "border-radius: 18px" in css
     assert "rgba(15, 23, 42" in css
+    assert "[data-testid=\"stRadio\"] label" in css
+    assert "[data-testid=\"stRadio\"] label:has(input:checked)" in css
+    assert "[data-testid=\"stRadio\"] label > div:first-child" in css
+    assert "display: none" in css
     assert "white-space: normal" in css
     assert "overflow-wrap: anywhere" in css
     assert "text-overflow: clip" in css

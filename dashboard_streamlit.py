@@ -543,8 +543,32 @@ h1 {
 [data-testid="stExpander"] summary {
     border-radius: 18px;
 }
+[data-testid="stRadio"] div[role="radiogroup"] {
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
 [data-testid="stRadio"] label {
     border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(15, 23, 42, 0.58);
+    padding: 0.48rem 0.82rem;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+[data-testid="stRadio"] label > div:first-child {
+    display: none;
+}
+[data-testid="stRadio"] label:has(input:checked) {
+    border-color: #ff4d4d;
+    background: #ff4d4d;
+    color: #ffffff;
+}
+[data-testid="stRadio"] label:hover {
+    border-color: var(--kir-border-strong);
+    background: rgba(30, 41, 59, 0.92);
 }
 .stButton > button,
 [data-testid="stDownloadButton"] > button {
