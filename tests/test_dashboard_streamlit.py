@@ -845,6 +845,7 @@ from dashboard_streamlit import (
     DASHBOARD_SCREENS,
     build_bin_table_by_width,
     default_bin_width,
+    adjust_bin_width,
     format_kir_summary_amount,
     format_kir_summary_display,
     prepare_bin_chart_table,
@@ -879,6 +880,12 @@ def test_default_bin_width_can_ignore_extreme_percent_tail():
     width = default_bin_width(series, minimum=0.01, maximum=5.0, upper_quantile=0.99)
 
     assert 0.01 <= width <= 1.0
+
+
+def test_adjust_bin_width_supports_fractional_percent_steps():
+    assert adjust_bin_width(0.2, 0.1, minimum=0.01) == 0.3
+    assert adjust_bin_width(0.2, -0.1, minimum=0.01) == 0.1
+    assert adjust_bin_width(0.01, -0.1, minimum=0.01) == 0.01
 
 
 def test_build_bin_table_by_width_caps_huge_bin_counts_with_tail():

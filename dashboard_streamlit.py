@@ -732,7 +732,7 @@ def default_bin_width(series, target_bins=30, minimum=1, maximum=1000, upper_qua
 
 
 def adjust_bin_width(current, delta, minimum=1):
-    return max(float(minimum), float(current) + float(delta))
+    return round(max(float(minimum), float(current) + float(delta)), 10)
 
 
 def bin_width_settings(is_percent_metric=False):
@@ -766,8 +766,8 @@ def chart_settings_summary(bin_width, custom_percentile, hide_zero_values=False,
     return f"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin {_format_setting_number(bin_width)}, P{int(custom_percentile)}, {zero_text}, {tail_text}"
 
 
-def _adjust_session_bin_width(key, delta):
-    st.session_state[key] = adjust_bin_width(st.session_state.get(key, 1), delta)
+def _adjust_session_bin_width(key, delta, minimum=1):
+    st.session_state[key] = adjust_bin_width(st.session_state.get(key, minimum), delta, minimum=minimum)
 
 
 def first_bins_store_sum(bin_table, n_bins):
@@ -1248,7 +1248,12 @@ def _render_metric_analysis_tab(
             step_columns,
             width_settings["buttons"],
         ):
-            column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
+            column.button(
+                label,
+                key=f"{bin_width_key}_{label}",
+                on_click=_adjust_session_bin_width,
+                args=(bin_width_key, delta, width_settings["minimum"]),
+            )
         custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
 
         max_bin_count = 500 if is_percent_metric else 2000
