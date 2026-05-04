@@ -14,6 +14,7 @@ from dashboard_streamlit import (
     format_run_result,
     format_running_message,
     metric_analysis_context,
+    _problem_rows,
     render_metric_analysis_context_html,
     render_correlation_interpretation_html,
     pipeline_progress_value,
@@ -239,6 +240,39 @@ def test_apply_filter_values_filters_only_selected_columns():
     filtered = apply_filter_values(df, {"week": [1], "ts": []})
 
     assert filtered["value"].tolist() == [10, 20]
+
+
+def test_apply_filter_values_excludes_total_rows_by_default_for_analytics():
+    df = pd.DataFrame({"value": [10, 20, 30], "is_total_row": [False, True, False]})
+
+    filtered = apply_filter_values(df, {})
+
+    assert filtered["value"].tolist() == [10, 30]
+
+
+def test_apply_filter_values_can_keep_total_rows_for_problem_rows():
+    df = pd.DataFrame({"value": [10, 20, 30], "is_total_row": [False, True, False]})
+
+    filtered = apply_filter_values(df, {}, exclude_total_rows=False)
+
+    assert filtered["value"].tolist() == [10, 20, 30]
+
+
+def test_problem_rows_include_source_total_rows():
+    df = pd.DataFrame(
+        {
+            "value": [10, 20],
+            "has_poteri_match": [True, True],
+            "has_missing_key": [False, False],
+            "has_duplicate_kir_key": [False, False],
+            "has_duplicate_poteri_key": [False, False],
+            "is_total_row": [False, True],
+        }
+    )
+
+    problems = _problem_rows(df)
+
+    assert problems["value"].tolist() == [20]
 
 
 def test_format_percentile_card_separates_count_from_threshold():

@@ -45,7 +45,13 @@ FREE_STOCK_COL = "\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0439 \u0422\
 FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_status"]
 GROUP_COLUMNS = [TS_COL, CATEGORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
-PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
+PROBLEM_FLAG_COLUMNS = [
+    "has_poteri_match",
+    "has_missing_key",
+    "has_duplicate_kir_key",
+    "has_duplicate_poteri_key",
+    "is_total_row",
+]
 KIR_SUMMARY_AMOUNT_COLUMNS = ["Сумма КИР", "Сумма списаний", "Сумма выручки", "Сумма свободного ТЗ"]
 RELATIONSHIP_HEADING_COLORS = {
     WRITEOFFS_COL: {"accent": "#fb923c", "background": "rgba(251, 146, 60, 0.18)"},
@@ -391,8 +397,10 @@ def filter_label(column):
     return str(column)
 
 
-def apply_filter_values(df, filter_values):
+def apply_filter_values(df, filter_values, exclude_total_rows=True):
     filtered = df.copy()
+    if exclude_total_rows and "is_total_row" in filtered.columns:
+        filtered = filtered[~filtered["is_total_row"].fillna(False)]
     for column, selected in filter_values.items():
         if column in filtered.columns and selected:
             filtered = filtered[filtered[column].isin(selected)]
@@ -2101,6 +2109,7 @@ def main():
     if metric not in metrics:
         metric = metrics[0]
     filtered = apply_filter_values(df, settings.get("filters", {}))
+    problem_filtered = apply_filter_values(df, settings.get("filters", {}), exclude_total_rows=False)
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
     screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
@@ -2115,7 +2124,7 @@ def main():
     elif screen == "Качество данных":
         _render_audit_tab(run_dir, filtered, numeric_metric)
     elif screen == "Проблемные строки":
-        _render_problem_rows_tab(filtered)
+        _render_problem_rows_tab(problem_filtered)
     elif screen == "Данные":
         st.subheader("Пример отфильтрованных данных")
         st.dataframe(filtered.head(1000), use_container_width=True)
