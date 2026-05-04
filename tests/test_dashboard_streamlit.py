@@ -245,10 +245,11 @@ def test_format_percentile_card_for_percent_metric_uses_business_percent_format(
         metric_label="процента КИР",
     )
 
-    assert card["count_share"] == "доля магазинов: 15.0%"
-    assert card["threshold_value"] == "1.39"
+    assert card["primary_value"] == "1,39%"
+    assert card["count_details"] == "3 724 магазинов, 15,0% выборки"
+    assert card["threshold_value"] == "1,39"
     assert card["threshold_unit"] == "%"
-    assert card["threshold_help"] == "Это значение процента КИР, выше или равно которому находится 3,724 магазинов."
+    assert card["threshold_help"] == "Выше или равно этому проценту находятся 3 724 магазинов."
 
 
 def test_metric_unit_for_metric_detects_rubles_and_units():

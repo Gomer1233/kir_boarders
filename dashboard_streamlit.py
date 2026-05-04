@@ -480,15 +480,18 @@ def metric_unit_for_metric(metric):
 
 def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
     count = f"{int(item['count']):,}"
+    count_for_sentence = f"{int(item['count']):,}".replace(",", " ")
     share = item.get("share")
     if share is None:
         total_count = int(item.get("total_count", 0))
         share = int(item["count"]) / total_count if total_count else 0
     is_percent_metric = metric_unit == "%"
     count_share = f"доля магазинов: {float(share):.1%}" if is_percent_metric else f"{float(share):.1%}"
-    threshold_value = f"{float(item['threshold']):,.2f}" if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
+    threshold_value = (
+        f"{float(item['threshold']):,.2f}".replace(".", ",") if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
+    )
     direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
-    return {
+    card = {
         "label": label,
         "count": count,
         "count_share": count_share,
@@ -497,17 +500,52 @@ def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
         "threshold_unit": metric_unit,
         "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 {metric_label}, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
     }
+    if is_percent_metric:
+        share_text = f"{float(share) * 100:.1f}".replace(".", ",")
+        threshold_display = f"{threshold_value}%"
+        card.update(
+            {
+                "primary_value": threshold_display,
+                "count_details": f"{count_for_sentence} магазинов, {share_text}% выборки",
+                "threshold_help": f"{direction.capitalize()} \u044d\u0442\u043e\u043c\u0443 \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u0443 \u043d\u0430\u0445\u043e\u0434\u044f\u0442\u0441\u044f {count_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
+            }
+        )
+    return card
 
 
 def render_percentile_card_html(card, color):
     label = escape(str(card["label"]))
     count = escape(str(card["count"]))
     count_share = escape(str(card.get("count_share", "")))
+    primary_value = escape(str(card.get("primary_value", "")))
+    count_details = escape(str(card.get("count_details", "")))
     threshold_label = escape(str(card["threshold_label"]))
     threshold_value = escape(str(card["threshold_value"]))
     threshold_unit = escape(str(card.get("threshold_unit", "")))
     threshold_help = escape(str(card.get("threshold_help", "")))
     threshold_display = f"{threshold_value} {threshold_unit}".strip()
+    if primary_value:
+        primary_html = f"""
+        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
+            {primary_value}
+        </div>
+        <div style="font-size:0.86rem;font-weight:720;color:rgba(255,255,255,0.60);margin-top:10px;">
+            {count_details}
+        </div>
+        """
+        threshold_html = ""
+    else:
+        primary_html = f"""
+        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
+            {count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>
+        </div>
+        """
+        threshold_html = f"""
+        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
+            {threshold_label}
+            <span style="color:{color};font-weight:850;">{threshold_display}</span>
+        </div>
+        """
     color = escape(str(color))
     return f"""
     <div style="
@@ -520,13 +558,8 @@ def render_percentile_card_html(card, color):
         min-height: 132px;
     ">
         <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
-        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
-            {count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>
-        </div>
-        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
-            {threshold_label}
-            <span style="color:{color};font-weight:850;">{threshold_display}</span>
-        </div>
+        {primary_html}
+        {threshold_html}
         <div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">
             {threshold_help}
         </div>
