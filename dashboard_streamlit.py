@@ -1480,11 +1480,20 @@ def format_kir_summary_amount(value):
     return f"{float(value):,.0f}".replace(",", " ")
 
 
+def format_kir_summary_percent(value):
+    if value is None or pd.isna(value):
+        return ""
+    return f"{float(value):,.1f}%".replace(",", " ")
+
+
 def format_kir_summary_display(summary):
     display = summary.copy()
     for column in KIR_SUMMARY_AMOUNT_COLUMNS:
         if column in display.columns:
             display[column] = display[column].map(format_kir_summary_amount)
+    for column in display.columns:
+        if str(column).startswith("КИР / ") and str(column).endswith(", %"):
+            display[column] = display[column].map(format_kir_summary_percent)
     return display
 
 

@@ -923,7 +923,8 @@ def test_format_kir_summary_display_formats_amounts_without_decimals():
     assert display.loc[0, "Сумма списаний"] == "295 312 092"
     assert display.loc[0, "Сумма выручки"] == "34 933 625 180"
     assert display.loc[1, "Сумма КИР"] == ""
-    assert display.loc[0, "КИР / Списания, %"] == 264.8659
+    assert display.loc[0, "КИР / Списания, %"] == "264.9%"
+    assert display.loc[1, "КИР / Списания, %"] == ""
 
 
 def test_format_kir_summary_amount_handles_empty_values():
