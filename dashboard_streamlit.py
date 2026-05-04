@@ -484,14 +484,16 @@ def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
     if share is None:
         total_count = int(item.get("total_count", 0))
         share = int(item["count"]) / total_count if total_count else 0
-    count_share = f"{float(share):.1%}"
+    is_percent_metric = metric_unit == "%"
+    count_share = f"доля магазинов: {float(share):.1%}" if is_percent_metric else f"{float(share):.1%}"
+    threshold_value = f"{float(item['threshold']):,.2f}" if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
     direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
     return {
         "label": label,
         "count": count,
         "count_share": count_share,
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
-        "threshold_value": _format_number(item["threshold"]),
+        "threshold_value": threshold_value,
         "threshold_unit": metric_unit,
         "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 {metric_label}, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
     }

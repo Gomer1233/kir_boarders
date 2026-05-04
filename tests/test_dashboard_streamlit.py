@@ -237,6 +237,20 @@ def test_format_percentile_card_explains_lower_threshold_direction():
     assert card["threshold_help"] == "Это значение КИР, ниже или равно которому находится 6,498 магазинов."
 
 
+def test_format_percentile_card_for_percent_metric_uses_business_percent_format():
+    card = format_percentile_card(
+        "Stores >= P85",
+        {"count": 3724, "total_count": 24825, "threshold": 1.389432},
+        metric_unit="%",
+        metric_label="процента КИР",
+    )
+
+    assert card["count_share"] == "доля магазинов: 15.0%"
+    assert card["threshold_value"] == "1.39"
+    assert card["threshold_unit"] == "%"
+    assert card["threshold_help"] == "Это значение процента КИР, выше или равно которому находится 3,724 магазинов."
+
+
 def test_metric_unit_for_metric_detects_rubles_and_units():
     assert metric_unit_for_metric("КИР-950, руб. без НДС") == "руб"
     assert metric_unit_for_metric("КИР-950, шт") == "шт"
