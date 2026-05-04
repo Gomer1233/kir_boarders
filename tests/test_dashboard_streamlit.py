@@ -1100,6 +1100,16 @@ def test_split_by_network_returns_one_frame_per_ts():
     assert [len(group) for _, group in groups] == [1, 2]
 
 
+def test_split_by_network_handles_missing_ts_without_pandas_categorical_error():
+    df = pd.DataFrame({TS_COL: ["B", None, "A", float("nan")], "value": [1, 2, 3, 4]})
+
+    groups = split_by_network(df)
+
+    assert [name for name, _ in groups] == ["A", "B", "Без ТС"]
+    missing_group = dict(groups)["Без ТС"]
+    assert missing_group["value"].tolist() == [2, 4]
+
+
 def test_filter_visual_outliers_trims_extreme_x_and_y_values_without_mutating_source():
     df = pd.DataFrame({"_metric": [1, 2, 3, 1000], WRITEOFFS: [10, 20, 30, 9999]})
 

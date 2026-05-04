@@ -1068,7 +1068,8 @@ def percentile_store_counts(series, custom_percentile, store_series=None):
 def split_by_network(df):
     if TS_COL not in df.columns:
         return [("All", df)]
-    return [(str(name), group.copy()) for name, group in sorted(df.groupby(TS_COL, dropna=False), key=lambda item: str(item[0]))]
+    network_key = df[TS_COL].astype("string").fillna("\u0411\u0435\u0437 \u0422\u0421")
+    return [(str(name), group.copy()) for name, group in sorted(df.groupby(network_key), key=lambda item: str(item[0]))]
 
 
 def filter_visual_outliers(df, x_col, y_col, quantile=0.99):
