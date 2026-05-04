@@ -53,13 +53,13 @@ RELATIONSHIP_HEADING_COLORS = {
     FREE_STOCK_COL: {"accent": "#60a5fa", "background": "rgba(96, 165, 250, 0.18)"},
 }
 DASHBOARD_SCREENS = [
-    "Overview",
-    "Metric analysis",
+    "1. Корреляции",
     "Проценты КИР",
-    "Group comparison",
-    "Poteri relationships",
-    "Problem rows",
-    "Data",
+    "Распределение показателя",
+    "Сравнение групп",
+    "Качество данных",
+    "Проблемные строки",
+    "Данные",
 ]
 
 
@@ -1913,21 +1913,21 @@ def main():
     filtered = apply_filter_values(df, settings.get("filters", {}))
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
-    screen = st.radio("Dashboard screen", DASHBOARD_SCREENS, horizontal=True)
-    if screen == "Overview":
-        _render_audit_tab(run_dir, filtered, numeric_metric)
-    elif screen == "Metric analysis":
-        _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
+    screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
+    if screen == "1. Корреляции":
+        _render_relationships_tab(filtered, metric, numeric_metric)
     elif screen == "Проценты КИР":
         _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
-    elif screen == "Group comparison":
+    elif screen == "Распределение показателя":
+        _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
+    elif screen == "Сравнение групп":
         _render_group_comparison_tab(filtered, numeric_metric)
-    elif screen == "Poteri relationships":
-        _render_relationships_tab(filtered, metric, numeric_metric)
-    elif screen == "Problem rows":
+    elif screen == "Качество данных":
+        _render_audit_tab(run_dir, filtered, numeric_metric)
+    elif screen == "Проблемные строки":
         _render_problem_rows_tab(filtered)
-    elif screen == "Data":
-        st.subheader("Filtered data sample")
+    elif screen == "Данные":
+        st.subheader("Пример отфильтрованных данных")
         st.dataframe(filtered.head(1000), use_container_width=True)
 
 

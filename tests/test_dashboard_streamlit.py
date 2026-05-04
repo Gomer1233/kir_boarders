@@ -855,13 +855,13 @@ from dashboard_streamlit import (
 
 def test_dashboard_screens_match_tz_sections():
     assert DASHBOARD_SCREENS == [
-        "Overview",
-        "Metric analysis",
+        "1. Корреляции",
         "Проценты КИР",
-        "Group comparison",
-        "Poteri relationships",
-        "Problem rows",
-        "Data",
+        "Распределение показателя",
+        "Сравнение групп",
+        "Качество данных",
+        "Проблемные строки",
+        "Данные",
     ]
 
 
