@@ -856,8 +856,8 @@ from dashboard_streamlit import (
 def test_dashboard_screens_match_tz_sections():
     assert DASHBOARD_SCREENS == [
         "1. Корреляции",
-        "Проценты КИР",
-        "Распределение показателя",
+        "2. Проценты КИР",
+        "3. Распределение показателя",
         "Сравнение групп",
         "Качество данных",
         "Проблемные строки",

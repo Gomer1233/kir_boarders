@@ -54,8 +54,8 @@ RELATIONSHIP_HEADING_COLORS = {
 }
 DASHBOARD_SCREENS = [
     "1. Корреляции",
-    "Проценты КИР",
-    "Распределение показателя",
+    "2. Проценты КИР",
+    "3. Распределение показателя",
     "Сравнение групп",
     "Качество данных",
     "Проблемные строки",
@@ -1916,9 +1916,9 @@ def main():
     screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
     if screen == "1. Корреляции":
         _render_relationships_tab(filtered, metric, numeric_metric)
-    elif screen == "Проценты КИР":
+    elif screen == "2. Проценты КИР":
         _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
-    elif screen == "Распределение показателя":
+    elif screen == "3. Распределение показателя":
         _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
     elif screen == "Сравнение групп":
         _render_group_comparison_tab(filtered, numeric_metric)
