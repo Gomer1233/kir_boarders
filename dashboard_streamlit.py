@@ -801,6 +801,21 @@ def first_bin_count_for_target_share(bin_table, target_share):
     return int(matching.index[0]) + 1
 
 
+def recommended_bin_width_for_target_share(metric_series, target_share, bins_used, current_bin_width, minimum=0.01):
+    numeric = pd.to_numeric(metric_series, errors="coerce").dropna()
+    if numeric.empty or int(bins_used) <= 0:
+        return None
+    current_bin_width = float(current_bin_width)
+    if current_bin_width <= 0:
+        return None
+    start = (float(numeric.min()) // current_bin_width) * current_bin_width
+    target_value = float(numeric.quantile(min(max(float(target_share), 0.0), 1.0)))
+    width = (target_value - start) / int(bins_used)
+    if width <= 0:
+        return float(minimum)
+    return round(max(float(minimum), width), 4)
+
+
 def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):
     if bin_table.empty:
         return {"bins_used": 0, "store_sum": 0, "total_stores": 0, "store_share": 0}
@@ -1347,7 +1362,25 @@ def _render_metric_analysis_tab(
                 key=f"{key_prefix}_first_bins_target_share_{metric}",
             )
             n_bins = first_bin_count_for_target_share(bin_table, target_share_percent / 100)
-            st.caption(f"Minimum first bins covering at least {target_share_percent:.1f}% of stores: {n_bins}")
+            previous_bins = first_bins_summary(numeric_metric, bin_table, n_bins - 1, store_series=store_series) if n_bins > 1 else None
+            recommended_width = recommended_bin_width_for_target_share(
+                numeric_metric,
+                target_share_percent / 100,
+                n_bins,
+                bin_width,
+                minimum=width_settings["minimum"],
+            )
+            st.caption(
+                f"Selected {n_bins} first bins because this mode uses the first bin count that reaches at least "
+                f"{target_share_percent:.1f}% of stores."
+            )
+            if previous_bins:
+                st.caption(f"Previous {n_bins - 1} bins cover {previous_bins['store_share']:.1%} of stores.")
+            if recommended_width is not None:
+                st.info(
+                    f"Approx. recommended bin width for this target: {_format_setting_number(recommended_width)}. "
+                    "Set this in chart settings above, then re-check the actual store share here."
+                )
         else:
             n_bins = st.number_input(
                 "Sum first N bins",

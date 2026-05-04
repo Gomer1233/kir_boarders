@@ -980,6 +980,7 @@ from dashboard_streamlit import (
     first_bin_count_for_target_share,
     first_bins_store_sum,
     first_bins_summary,
+    recommended_bin_width_for_target_share,
     relationship_chart_rows,
     relationship_heading_html,
     percentile_store_counts,
@@ -1116,6 +1117,14 @@ def test_first_bin_count_for_target_share_returns_minimum_bins_covering_share():
     assert first_bin_count_for_target_share(table, 0.70) == 2
     assert first_bin_count_for_target_share(table, 1.00) == 3
     assert first_bin_count_for_target_share(table, 0) == 1
+
+
+def test_recommended_bin_width_for_target_share_aligns_target_boundary_to_used_bins():
+    metric = pd.Series(range(101))
+
+    recommendation = recommended_bin_width_for_target_share(metric, target_share=0.40, bins_used=8, current_bin_width=10)
+
+    assert recommendation == 5.0
 
 
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():
