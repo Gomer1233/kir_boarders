@@ -481,9 +481,10 @@ def metric_unit_for_metric(metric):
 def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
     count = f"{int(item['count']):,}"
     count_for_sentence = f"{int(item['count']):,}".replace(",", " ")
+    total_count = int(item.get("total_count", 0))
+    total_for_sentence = f"{total_count:,}".replace(",", " ")
     share = item.get("share")
     if share is None:
-        total_count = int(item.get("total_count", 0))
         share = int(item["count"]) / total_count if total_count else 0
     is_percent_metric = metric_unit == "%"
     count_share = f"доля магазинов: {float(share):.1%}" if is_percent_metric else f"{float(share):.1%}"
@@ -501,13 +502,16 @@ def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
         "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 {metric_label}, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
     }
     if is_percent_metric:
-        share_text = f"{float(share) * 100:.1f}".replace(".", ",")
-        threshold_display = f"{threshold_value}%"
+        opposite_count = max(total_count - int(item["count"]), 0)
+        opposite_for_sentence = f"{opposite_count:,}".replace(",", " ")
+        is_lower = "<=" in label
+        count_details = "магазинов ниже или равно порогу" if is_lower else "магазина выше или равно порогу"
+        opposite_label = "Выше порога" if is_lower else "Ниже порога"
         card.update(
             {
-                "primary_value": threshold_display,
-                "count_details": f"{count_for_sentence} магазинов, {share_text}% выборки",
-                "threshold_help": f"{direction.capitalize()} \u044d\u0442\u043e\u043c\u0443 \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u0443 \u043d\u0430\u0445\u043e\u0434\u044f\u0442\u0441\u044f {count_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
+                "primary_value": count_for_sentence,
+                "count_details": count_details,
+                "threshold_help": f"\u041f\u043e\u0440\u043e\u0433: {threshold_value}%. {opposite_label}: {opposite_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: {total_for_sentence}.",
             }
         )
     return card
