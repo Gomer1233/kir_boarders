@@ -203,6 +203,9 @@ def test_dashboard_css_wraps_long_selectbox_values():
     assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label > div:first-child" in css
     assert "[data-testid=\"stRadio\"] label {" not in css
     assert "display: none" in css
+    assert "justify-content: center" in css
+    assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label p" in css
+    assert "line-height: 1" in css
     assert "white-space: normal" in css
     assert "overflow-wrap: anywhere" in css
     assert "text-overflow: clip" in css

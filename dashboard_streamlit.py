@@ -551,15 +551,20 @@ h1 {
     border-radius: 999px;
     border: 1px solid rgba(148, 163, 184, 0.28);
     background: rgba(15, 23, 42, 0.58);
-    padding: 0.48rem 0.82rem;
+    padding: 0.54rem 0.95rem;
     min-height: 38px;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0;
     transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 [data-testid="stRadio"] div[role="radiogroup"] label > div:first-child {
     display: none;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label p {
+    margin: 0;
+    line-height: 1;
 }
 [data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {
     border-color: #ff4d4d;
