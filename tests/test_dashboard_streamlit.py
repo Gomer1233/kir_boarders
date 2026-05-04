@@ -283,6 +283,20 @@ def test_render_percentile_card_html_includes_soft_percentile_color():
     assert "#ff4d4d" in html
 
 
+def test_render_percentile_card_html_has_no_indented_html_code_blocks():
+    card = format_percentile_card(
+        "Stores <= P25",
+        {"count": 6207, "total_count": 24825, "threshold": 0.6843},
+        metric_unit="%",
+        metric_label="процента КИР",
+    )
+
+    html = render_percentile_card_html(card, "#2fbf71")
+
+    assert "\n    <div" not in html
+    assert "\n        <div" not in html
+
+
 def test_metric_bar_value_column_prefers_unique_store_counts():
     assert metric_bar_value_column(pd.DataFrame({"count": [1], "store_count": [1]})) == "store_count"
     assert metric_bar_value_column(pd.DataFrame({"count": [1]})) == "count"

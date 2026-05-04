@@ -525,46 +525,33 @@ def render_percentile_card_html(card, color):
     threshold_help = escape(str(card.get("threshold_help", "")))
     threshold_display = f"{threshold_value} {threshold_unit}".strip()
     if primary_value:
-        primary_html = f"""
-        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
-            {primary_value}
-        </div>
-        <div style="font-size:0.86rem;font-weight:720;color:rgba(255,255,255,0.60);margin-top:10px;">
-            {count_details}
-        </div>
-        """
+        primary_html = (
+            '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
+            f"{primary_value}</div>"
+            '<div style="font-size:0.86rem;font-weight:720;color:rgba(255,255,255,0.60);margin-top:10px;">'
+            f"{count_details}</div>"
+        )
         threshold_html = ""
     else:
-        primary_html = f"""
-        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
-            {count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>
-        </div>
-        """
-        threshold_html = f"""
-        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
-            {threshold_label}
-            <span style="color:{color};font-weight:850;">{threshold_display}</span>
-        </div>
-        """
+        primary_html = (
+            '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
+            f'{count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>'
+            "</div>"
+        )
+        threshold_html = (
+            '<div style="font-size:0.84rem;color:rgba(255,255,255,0.68);margin-top:18px;">'
+            f'{threshold_label} <span style="color:{color};font-weight:850;">{threshold_display}</span></div>'
+        )
     color = escape(str(color))
-    return f"""
-    <div style="
-        border: 1px solid {color};
-        border-left: 7px solid {color};
-        border-radius: 14px;
-        padding: 16px 18px;
-        background: linear-gradient(135deg, color-mix(in srgb, {color} 18%, transparent), rgba(255,255,255,0.025));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
-        min-height: 132px;
-    ">
-        <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
-        {primary_html}
-        {threshold_html}
-        <div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">
-            {threshold_help}
-        </div>
-    </div>
-    """
+    return (
+        f'<div style="border:1px solid {color};border-left:7px solid {color};border-radius:14px;'
+        f'padding:16px 18px;background:linear-gradient(135deg, color-mix(in srgb, {color} 18%, transparent), rgba(255,255,255,0.025));'
+        'box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);min-height:132px;">'
+        f'<div style="font-size:0.9rem;font-weight:700;color:rgba(255,255,255,0.92);">{label}</div>'
+        f"{primary_html}{threshold_html}"
+        '<div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">'
+        f"{threshold_help}</div></div>"
+    )
 
 
 def metric_bar_value_column(bin_table):
