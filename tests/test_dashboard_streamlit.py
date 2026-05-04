@@ -192,6 +192,12 @@ def test_dashboard_css_wraps_long_selectbox_values():
     css = dashboard_css()
 
     assert ".stSelectbox" in css
+    assert "radial-gradient" in css
+    assert "linear-gradient" in css
+    assert 'data-testid="stAppViewContainer"' in css
+    assert 'data-testid="stSidebar"' in css
+    assert "border-radius: 18px" in css
+    assert "rgba(15, 23, 42" in css
     assert "white-space: normal" in css
     assert "overflow-wrap: anywhere" in css
     assert "text-overflow: clip" in css

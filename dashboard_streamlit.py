@@ -484,10 +484,112 @@ def metric_unit_for_metric(metric):
 def dashboard_css():
     return """
 <style>
+:root {
+    --kir-bg: #070b12;
+    --kir-surface: rgba(15, 23, 42, 0.78);
+    --kir-surface-strong: rgba(15, 23, 42, 0.92);
+    --kir-border: rgba(148, 163, 184, 0.18);
+    --kir-border-strong: rgba(96, 165, 250, 0.34);
+    --kir-text-muted: #9aa6b2;
+}
+[data-testid="stAppViewContainer"] {
+    background:
+        linear-gradient(90deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.94) 46%, rgba(2, 6, 23, 0.62) 78%, rgba(2, 6, 23, 0.36) 100%),
+        radial-gradient(820px 620px at 104% 18%, rgba(96, 165, 250, 0.26), transparent 62%),
+        radial-gradient(760px 560px at 104% 96%, rgba(47, 191, 113, 0.22), transparent 68%),
+        var(--kir-bg);
+}
+[data-testid="stAppViewContainer"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.42) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(90deg, transparent 0%, black 42%, black 100%);
+}
+[data-testid="stHeader"] {
+    background: transparent;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.86));
+    border-right: 1px solid var(--kir-border);
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap: 0.85rem;
+}
+.block-container {
+    padding-top: 2.1rem;
+}
+h1 {
+    letter-spacing: -0.04em;
+}
+[data-testid="stExpander"],
+[data-testid="stForm"],
+[data-testid="stDataFrame"],
+[data-testid="stTable"],
+[data-testid="stPlotlyChart"],
+[data-testid="stAlert"] {
+    border: 1px solid var(--kir-border);
+    border-radius: 18px;
+    background: var(--kir-surface);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 60px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+[data-testid="stExpander"] details {
+    background: transparent;
+}
+[data-testid="stExpander"] summary {
+    border-radius: 18px;
+}
+[data-testid="stRadio"] label {
+    border-radius: 999px;
+}
+.stButton > button,
+[data-testid="stDownloadButton"] > button {
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(15, 23, 42, 0.74);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.stButton > button:hover,
+[data-testid="stDownloadButton"] > button:hover {
+    border-color: var(--kir-border-strong);
+    background: rgba(30, 41, 59, 0.92);
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+.stTabs [data-baseweb="tab"] {
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.58);
+    padding: 0.45rem 0.75rem;
+}
+.stTabs [aria-selected="true"] {
+    border-color: #ff4d4d;
+    background: #ff4d4d;
+    color: #ffffff;
+}
+.stMetric {
+    border: 1px solid var(--kir-border);
+    border-radius: 18px;
+    background: var(--kir-surface);
+    padding: 1rem;
+}
+.element-container:has(.relationship-heading),
+.element-container:has(.analysis-context) {
+    margin-top: 0.2rem;
+}
 .stSelectbox div[data-baseweb="select"] > div {
     height: auto;
     min-height: 50px;
     align-items: flex-start;
+    border-radius: 13px;
+    background: rgba(8, 13, 22, 0.86);
+    border-color: rgba(148, 163, 184, 0.20);
 }
 .stSelectbox div[data-baseweb="select"] div[role="combobox"],
 .stSelectbox div[data-baseweb="select"] div[role="combobox"] > div,
@@ -501,6 +603,13 @@ def dashboard_css():
 .stSelectbox div[data-baseweb="select"] div[role="combobox"] {
     padding-top: 0.45rem;
     padding-bottom: 0.45rem;
+}
+.stMultiSelect div[data-baseweb="select"] > div,
+.stNumberInput input,
+.stTextInput input {
+    border-radius: 13px;
+    background: rgba(8, 13, 22, 0.86);
+    border-color: rgba(148, 163, 184, 0.20);
 }
 </style>
 """
