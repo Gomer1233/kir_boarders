@@ -481,8 +481,7 @@ def metric_unit_for_metric(metric):
     return ""
 
 
-def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
-    count = f"{int(item['count']):,}"
+def format_percentile_card(label, item, metric_unit="", metric_label="\u041a\u0418\u0420"):
     count_for_sentence = f"{int(item['count']):,}".replace(",", " ")
     total_count = int(item.get("total_count", 0))
     total_for_sentence = f"{total_count:,}".replace(",", " ")
@@ -490,34 +489,27 @@ def format_percentile_card(label, item, metric_unit="", metric_label="КИР"):
     if share is None:
         share = int(item["count"]) / total_count if total_count else 0
     is_percent_metric = metric_unit == "%"
-    count_share = f"доля магазинов: {float(share):.1%}" if is_percent_metric else f"{float(share):.1%}"
+    count_share = f"{float(share):.1%}"
     threshold_value = (
         f"{float(item['threshold']):,.2f}".replace(".", ",") if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
     )
-    direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
-    card = {
+    is_lower = "<=" in label
+    count_details = "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443" if is_lower else "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443"
+    opposite_count = max(total_count - int(item["count"]), 0)
+    opposite_for_sentence = f"{opposite_count:,}".replace(",", " ")
+    opposite_label = "\u0412\u044b\u0448\u0435 \u043f\u043e\u0440\u043e\u0433\u0430" if is_lower else "\u041d\u0438\u0436\u0435 \u043f\u043e\u0440\u043e\u0433\u0430"
+    threshold_display = f"{threshold_value} {metric_unit}".strip()
+    return {
         "label": label,
-        "count": count,
+        "count": f"{int(item['count']):,}",
         "count_share": count_share,
+        "primary_value": count_for_sentence,
+        "count_details": count_details,
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
         "threshold_value": threshold_value,
         "threshold_unit": metric_unit,
-        "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 {metric_label}, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
+        "threshold_help": f"\u041f\u043e\u0440\u043e\u0433: {threshold_display}. {opposite_label}: {opposite_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: {total_for_sentence}.",
     }
-    if is_percent_metric:
-        opposite_count = max(total_count - int(item["count"]), 0)
-        opposite_for_sentence = f"{opposite_count:,}".replace(",", " ")
-        is_lower = "<=" in label
-        count_details = "магазинов ниже или равно порогу" if is_lower else "магазина выше или равно порогу"
-        opposite_label = "Выше порога" if is_lower else "Ниже порога"
-        card.update(
-            {
-                "primary_value": count_for_sentence,
-                "count_details": count_details,
-                "threshold_help": f"\u041f\u043e\u0440\u043e\u0433: {threshold_value}%. {opposite_label}: {opposite_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: {total_for_sentence}.",
-            }
-        )
-    return card
 
 
 def render_percentile_card_html(card, color):
@@ -532,23 +524,27 @@ def render_percentile_card_html(card, color):
     threshold_help = escape(str(card.get("threshold_help", "")))
     threshold_display = f"{threshold_value} {threshold_unit}".strip()
     if primary_value:
+        share_html = (
+            f' <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>'
+            if count_share
+            else ""
+        )
         primary_html = (
             '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
-            f"{primary_value}</div>"
+            f"{primary_value}{share_html}</div>"
             '<div style="font-size:0.86rem;font-weight:720;color:rgba(255,255,255,0.60);margin-top:10px;">'
             f"{count_details}</div>"
         )
-        threshold_html = ""
     else:
         primary_html = (
             '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
             f'{count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>'
             "</div>"
         )
-        threshold_html = (
-            '<div style="font-size:0.84rem;color:rgba(255,255,255,0.68);margin-top:18px;">'
-            f'{threshold_label} <span style="color:{color};font-weight:850;">{threshold_display}</span></div>'
-        )
+    threshold_html = (
+        '<div style="font-size:0.84rem;color:rgba(255,255,255,0.68);margin-top:18px;">'
+        f'{threshold_label} <span style="color:{color};font-weight:850;">{threshold_display}</span></div>'
+    )
     color = escape(str(color))
     return (
         f'<div style="border:1px solid {color};border-left:7px solid {color};border-radius:14px;'

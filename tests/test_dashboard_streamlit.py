@@ -218,15 +218,13 @@ def test_apply_filter_values_filters_only_selected_columns():
 def test_format_percentile_card_separates_count_from_threshold():
     card = format_percentile_card("Stores >= P85", {"count": 21140, "total_count": 26213, "threshold": 4197.33}, metric_unit="руб")
 
-    assert card == {
-        "label": "Stores >= P85",
-        "count": "21,140",
-        "count_share": "80.6%",
-        "threshold_label": "Порог метрики",
-        "threshold_value": "4,197.33",
-        "threshold_unit": "руб",
-        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
-    }
+    assert card["primary_value"] == "21 140"
+    assert card["count_share"] == "80.6%"
+    assert card["count_details"] == "магазинов выше или равно порогу"
+    assert card["threshold_label"] == "Порог метрики"
+    assert card["threshold_value"] == "4,197.33"
+    assert card["threshold_unit"] == "руб"
+    assert card["threshold_help"] == "Порог: 4,197.33 руб. Ниже порога: 5 073 магазинов. Всего в выборке: 26 213."
 
 
 def test_format_percentile_card_explains_lower_threshold_direction():
@@ -234,7 +232,9 @@ def test_format_percentile_card_explains_lower_threshold_direction():
 
     assert card["threshold_unit"] == "шт"
     assert card["count_share"] == "24.8%"
-    assert card["threshold_help"] == "Это значение КИР, ниже или равно которому находится 6,498 магазинов."
+    assert card["primary_value"] == "6 498"
+    assert card["count_details"] == "магазинов ниже или равно порогу"
+    assert card["threshold_help"] == "Порог: 0.00 шт. Выше порога: 19 715 магазинов. Всего в выборке: 26 213."
 
 
 def test_format_percentile_card_for_percent_metric_uses_business_percent_format():
@@ -246,10 +246,11 @@ def test_format_percentile_card_for_percent_metric_uses_business_percent_format(
     )
 
     assert card["primary_value"] == "3 724"
-    assert card["count_details"] == "магазина выше или равно порогу"
+    assert card["count_share"] == "15.0%"
+    assert card["count_details"] == "магазинов выше или равно порогу"
     assert card["threshold_value"] == "1,39"
     assert card["threshold_unit"] == "%"
-    assert card["threshold_help"] == "Порог: 1,39%. Ниже порога: 21 101 магазин. Всего в выборке: 24 825."
+    assert card["threshold_help"] == "Порог: 1,39 %. Ниже порога: 21 101 магазинов. Всего в выборке: 24 825."
 
 
 def test_metric_unit_for_metric_detects_rubles_and_units():
@@ -262,26 +263,22 @@ def test_metric_unit_for_metric_detects_rubles_and_units():
 
 
 def test_render_percentile_card_html_includes_soft_percentile_color():
-    card = {
-        "label": "Stores >= P85",
-        "count": "21,140",
-        "count_share": "80.6%",
-        "threshold_label": "Порог метрики",
-        "threshold_value": "4,197.33",
-        "threshold_unit": "руб",
-        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
-    }
+    card = format_percentile_card(
+        "Stores >= P85",
+        {"count": 21140, "total_count": 26213, "threshold": 4197.33},
+        metric_unit="руб",
+    )
 
     html = render_percentile_card_html(card, "#ff4d4d")
 
     assert "Stores &gt;= P85" in html
-    assert "21,140" in html
+    assert "21 140" in html
     assert "(80.6%)" in html
+    assert "магазинов выше или равно порогу" in html
     assert "Порог метрики" in html
     assert "Threshold" not in html
     assert "info-icon" not in html
     assert 'title="' not in html
-    assert "Это значение КИР, выше или равно которому находится 21,140 магазинов." in html
     assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33 руб</span>' in html
     assert "#ff4d4d" in html
 
