@@ -506,6 +506,26 @@ def test_calculate_relationship_stats_returns_correlations():
     assert stats["rows_used"].tolist() == [4, 4]
 
 
+def test_calculate_relationship_stats_can_use_same_cleaned_slice_as_relationship_charts():
+    df = pd.DataFrame(
+        {
+            KIR_950: [1, 2, 3, 4, 1000, 0, -1],
+            WRITEOFFS: [1, 2, 3, 4, 1000, 5, 6],
+        }
+    )
+
+    stats = calculate_relationship_stats(
+        df,
+        KIR_950,
+        [WRITEOFFS],
+        clean_visual=True,
+        outlier_quantile=0.80,
+    )
+
+    assert stats.loc[0, "rows_used"] == 4
+    assert stats.loc[0, "spearman"] == 1.0
+
+
 def test_correlation_strength_label_uses_spearman_business_ranges():
     assert correlation_strength_label(None) == "нет данных"
     assert correlation_strength_label(0.10) == "связи почти нет"
@@ -526,6 +546,14 @@ def test_prepare_correlation_display_stats_adds_business_strength_column():
 
     assert display["Сила связи"].tolist() == ["умеренная положительная связь", "сильная положительная связь"]
     assert display.columns.tolist() == ["Показатель", "Pearson", "Spearman", "Сила связи", "Строк в расчете"]
+
+
+def test_prepare_correlation_display_stats_uses_spearman_not_pearson_for_strength():
+    stats = pd.DataFrame([{"comparison": WRITEOFFS, "pearson": 0.95, "spearman": 0.10, "rows_used": 100}])
+
+    display = prepare_correlation_display_stats(stats)
+
+    assert display.loc[0, "Сила связи"] == "связи почти нет"
 
 
 def test_correlation_business_insights_explain_best_signal_and_nonlinear_gap():
@@ -571,6 +599,9 @@ def test_render_correlation_interpretation_html_escapes_values_and_explains_meth
 
     assert "Pearson" in html
     assert "Spearman" in html
+    assert "Оценка силы связи строится по Spearman" in html
+    assert "Положительная связь" in html
+    assert "Отрицательная связь" in html
     assert "не доказывает причинно-следственную связь" in html
     assert "ТС &lt;Перекресток&gt;" in html
     assert "A &lt;B&gt;" in html

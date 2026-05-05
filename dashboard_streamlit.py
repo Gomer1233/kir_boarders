@@ -1136,13 +1136,14 @@ def _clean_number(value):
     return round(value, 6)
 
 
-def calculate_relationship_stats(df, metric, relationship_columns):
+def calculate_relationship_stats(df, metric, relationship_columns, clean_visual=False, outlier_quantile=0.99):
     rows = []
-    metric_values = pd.to_numeric(df[metric], errors="coerce")
     for column in relationship_columns:
         if column not in df.columns:
             continue
-        comparison = pd.to_numeric(df[column], errors="coerce")
+        source = filter_visual_outliers(df, metric, column, quantile=outlier_quantile) if clean_visual else df
+        metric_values = pd.to_numeric(source[metric], errors="coerce")
+        comparison = pd.to_numeric(source[column], errors="coerce")
         pair = pd.DataFrame({"metric": metric_values, "comparison": comparison}).dropna()
         if len(pair) < 2:
             pearson = None
@@ -1291,7 +1292,10 @@ def render_correlation_interpretation_html(network_name, stats):
         'background:linear-gradient(135deg, rgba(15,23,42,0.72), rgba(30,41,59,0.36));">'
         f'<div style="font-weight:820;color:#e2e8f0;margin-bottom:8px;">\u041a\u0430\u043a \u0447\u0438\u0442\u0430\u0442\u044c \u043a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u0438: {network}</div>'
         '<div style="color:#94a3b8;font-size:0.86rem;line-height:1.45;margin-bottom:8px;">'
-        'Pearson \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043b\u0438\u043d\u0435\u0439\u043d\u0443\u044e \u0441\u0432\u044f\u0437\u044c. Spearman \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0440\u0430\u043d\u0433\u043e\u0432\u0443\u044e \u0441\u0432\u044f\u0437\u044c \u0438 \u0443\u0441\u0442\u043e\u0439\u0447\u0438\u0432\u0435\u0435 \u043a \u0445\u0432\u043e\u0441\u0442\u0430\u043c. '
+        '\u041e\u0446\u0435\u043d\u043a\u0430 \u0441\u0438\u043b\u044b \u0441\u0432\u044f\u0437\u0438 \u0441\u0442\u0440\u043e\u0438\u0442\u0441\u044f \u043f\u043e Spearman; Pearson \u043f\u043e\u043a\u0430\u0437\u0430\u043d \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u043e. '
+        'Spearman \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0440\u0430\u043d\u0433\u043e\u0432\u0443\u044e \u0441\u0432\u044f\u0437\u044c \u0438 \u0443\u0441\u0442\u043e\u0439\u0447\u0438\u0432\u0435\u0435 \u043a \u0445\u0432\u043e\u0441\u0442\u0430\u043c. Pearson \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043b\u0438\u043d\u0435\u0439\u043d\u0443\u044e \u0441\u0432\u044f\u0437\u044c \u0438 \u0447\u0443\u0432\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u0435\u043d \u043a \u0432\u044b\u0431\u0440\u043e\u0441\u0430\u043c. '
+        '\u041f\u043e\u043b\u043e\u0436\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f \u0441\u0432\u044f\u0437\u044c: \u0447\u0435\u043c \u0432\u044b\u0448\u0435 \u041a\u0418\u0420, \u0442\u0435\u043c \u043e\u0431\u044b\u0447\u043d\u043e \u0432\u044b\u0448\u0435 \u0441\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c. '
+        '\u041e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u0430\u044f \u0441\u0432\u044f\u0437\u044c: \u0447\u0435\u043c \u0432\u044b\u0448\u0435 \u041a\u0418\u0420, \u0442\u0435\u043c \u043e\u0431\u044b\u0447\u043d\u043e \u043d\u0438\u0436\u0435 \u0441\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c. '
         '\u0414\u043b\u044f \u0441\u0438\u043b\u044b \u0441\u0432\u044f\u0437\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c |Spearman|: 0.00-0.19 \u043f\u043e\u0447\u0442\u0438 \u043d\u0435\u0442, 0.20-0.39 \u0441\u043b\u0430\u0431\u0430\u044f, 0.40-0.59 \u0443\u043c\u0435\u0440\u0435\u043d\u043d\u0430\u044f, 0.60-0.79 \u0441\u0438\u043b\u044c\u043d\u0430\u044f, 0.80-1.00 \u043e\u0447\u0435\u043d\u044c \u0441\u0438\u043b\u044c\u043d\u0430\u044f. '
         '\u041a\u043e\u0440\u0440\u0435\u043b\u044f\u0446\u0438\u044f \u043d\u0435 \u0434\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043f\u0440\u0438\u0447\u0438\u043d\u043d\u043e-\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u0443\u044e \u0441\u0432\u044f\u0437\u044c.'
         '</div>'
@@ -1780,7 +1784,7 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
     hide_outliers = st.checkbox(
         "Hide visual outliers, zeros and negatives",
         value=False,
-        help="Only affects relationship charts. Keeps points where selected KIR metric and comparison metric are > 0, then applies percentile cutoff.",
+        help="Affects relationship charts and correlation stats. Keeps pairs where selected KIR metric and comparison metric are > 0, then applies percentile cutoff.",
     )
     outlier_percentile = st.slider(
         "Visible percentile cutoff",
@@ -1788,7 +1792,7 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         max_value=100,
         value=99,
         disabled=not hide_outliers,
-        help="Only affects charts. Source rows and calculations are not deleted.",
+        help="Affects charts and correlation stats. Source rows are not deleted.",
     )
 
     try:
@@ -1805,7 +1809,13 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
     network_names = [name for name, _ in networks]
     stats_by_network = {}
     for network_name, network_df in networks:
-        stats = calculate_relationship_stats(network_df, metric, available)
+        stats = calculate_relationship_stats(
+            network_df,
+            "_metric",
+            available,
+            clean_visual=hide_outliers,
+            outlier_quantile=outlier_percentile / 100,
+        )
         stats_by_network[network_name] = stats
         with st.expander(f"Correlation stats: {network_name}", expanded=False):
             st.dataframe(prepare_correlation_display_stats(stats), use_container_width=True)
