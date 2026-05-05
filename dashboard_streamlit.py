@@ -8,6 +8,14 @@ import re
 import pandas as pd
 
 from main_final_v3 import load_config
+from scripts.kir_percentages import (
+    PERCENT_BASE_COLUMNS,
+    add_kir_percentage_columns,
+    kir_metric_columns,
+    kir_percentage_summary,
+    kir_percentage_columns,
+    percentage_column_name,
+)
 from scripts.project_registry import create_project, list_projects, sanitize_project_name
 from scripts.upload_runner import (
     KIR_SOURCE_NAME,
@@ -37,19 +45,27 @@ FREE_STOCK_COL = "\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0439 \u0422\
 FILTER_COLUMNS = [WEEK_COL, TS_COL, CATEGORY_COL, "has_poteri_match", "quality_status"]
 GROUP_COLUMNS = [TS_COL, CATEGORY_COL]
 RELATIONSHIP_COLUMNS = [WRITEOFFS_COL, REVENUE_COL, FREE_STOCK_COL]
-PROBLEM_FLAG_COLUMNS = ["has_poteri_match", "has_missing_key", "has_duplicate_kir_key", "has_duplicate_poteri_key"]
+PROBLEM_FLAG_COLUMNS = [
+    "has_poteri_match",
+    "has_missing_key",
+    "has_duplicate_kir_key",
+    "has_duplicate_poteri_key",
+    "is_total_row",
+]
+KIR_SUMMARY_AMOUNT_COLUMNS = ["Сумма КИР", "Сумма списаний", "Сумма выручки", "Сумма свободного ТЗ"]
 RELATIONSHIP_HEADING_COLORS = {
     WRITEOFFS_COL: {"accent": "#fb923c", "background": "rgba(251, 146, 60, 0.18)"},
     REVENUE_COL: {"accent": "#4ade80", "background": "rgba(74, 222, 128, 0.16)"},
     FREE_STOCK_COL: {"accent": "#60a5fa", "background": "rgba(96, 165, 250, 0.18)"},
 }
 DASHBOARD_SCREENS = [
-    "Overview",
-    "Metric analysis",
-    "Group comparison",
-    "Poteri relationships",
-    "Problem rows",
-    "Data",
+    "1. Корреляции",
+    "2. Проценты КИР",
+    "3. Распределение показателя",
+    "Сравнение групп",
+    "Качество данных",
+    "Проблемные строки",
+    "Данные",
 ]
 
 
@@ -59,7 +75,8 @@ def _require_streamlit():
 
 
 def get_numeric_metric_columns(df):
-    return df.select_dtypes(include="number").columns.tolist()
+    percentage_columns = set(kir_percentage_columns(df))
+    return [column for column in df.select_dtypes(include="number").columns.tolist() if column not in percentage_columns]
 
 
 def sort_metric_columns(columns):
@@ -380,8 +397,10 @@ def filter_label(column):
     return str(column)
 
 
-def apply_filter_values(df, filter_values):
+def apply_filter_values(df, filter_values, exclude_total_rows=True):
     filtered = df.copy()
+    if exclude_total_rows and "is_total_row" in filtered.columns:
+        filtered = filtered[~filtered["is_total_row"].fillna(False)]
     for column, selected in filter_values.items():
         if column in filtered.columns and selected:
             filtered = filtered[filtered[column].isin(selected)]
@@ -457,30 +476,210 @@ def render_metric_analysis_context_html(context):
 
 
 def metric_unit_for_metric(metric):
-    metric_lower = str(metric).lower()
+    metric_text = str(metric).strip()
+    metric_lower = metric_text.lower()
+    if " / " in metric_lower and metric_lower.endswith("%"):
+        return "%"
     if "\u0440\u0443\u0431" in metric_lower or "rub" in metric_lower:
         return "\u0440\u0443\u0431"
     if "\u0448\u0442" in metric_lower or "pcs" in metric_lower:
         return "\u0448\u0442"
+    if "%" in metric_lower:
+        return "%"
     return ""
 
 
-def format_percentile_card(label, item, metric_unit=""):
-    count = f"{int(item['count']):,}"
+def dashboard_css():
+    return """
+<style>
+:root {
+    --kir-bg: #070b12;
+    --kir-surface: rgba(15, 23, 42, 0.78);
+    --kir-surface-strong: rgba(15, 23, 42, 0.92);
+    --kir-border: rgba(148, 163, 184, 0.18);
+    --kir-border-strong: rgba(96, 165, 250, 0.34);
+    --kir-text-muted: #9aa6b2;
+}
+[data-testid="stAppViewContainer"] {
+    background:
+        linear-gradient(90deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.94) 46%, rgba(2, 6, 23, 0.62) 78%, rgba(2, 6, 23, 0.36) 100%),
+        radial-gradient(820px 620px at 104% 18%, rgba(96, 165, 250, 0.26), transparent 62%),
+        radial-gradient(760px 560px at 104% 96%, rgba(47, 191, 113, 0.22), transparent 68%),
+        var(--kir-bg);
+}
+[data-testid="stAppViewContainer"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.42) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(90deg, transparent 0%, black 42%, black 100%);
+}
+[data-testid="stHeader"] {
+    background: transparent;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.86));
+    border-right: 1px solid var(--kir-border);
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap: 0.85rem;
+}
+.block-container {
+    padding-top: 2.1rem;
+}
+h1 {
+    letter-spacing: -0.04em;
+}
+[data-testid="stExpander"],
+[data-testid="stForm"],
+[data-testid="stDataFrame"],
+[data-testid="stTable"],
+[data-testid="stPlotlyChart"],
+[data-testid="stAlert"] {
+    border: 1px solid var(--kir-border);
+    border-radius: 18px;
+    background: var(--kir-surface);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 60px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+[data-testid="stExpander"] details {
+    background: transparent;
+}
+[data-testid="stExpander"] summary {
+    border-radius: 18px;
+}
+[data-testid="stRadio"] div[role="radiogroup"] {
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label {
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(15, 23, 42, 0.58);
+    padding: 0.54rem 0.95rem;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label > div:first-child {
+    display: none;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label p {
+    margin: 0;
+    line-height: 1;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {
+    border-color: #ff4d4d;
+    background: #ff4d4d;
+    color: #ffffff;
+}
+[data-testid="stRadio"] div[role="radiogroup"] label:hover {
+    border-color: var(--kir-border-strong);
+    background: rgba(30, 41, 59, 0.92);
+}
+.stButton > button,
+[data-testid="stDownloadButton"] > button {
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(15, 23, 42, 0.74);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.stButton > button:hover,
+[data-testid="stDownloadButton"] > button:hover {
+    border-color: var(--kir-border-strong);
+    background: rgba(30, 41, 59, 0.92);
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+.stTabs [data-baseweb="tab"] {
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.58);
+    padding: 0.45rem 0.75rem;
+}
+.stTabs [aria-selected="true"] {
+    border-color: #ff4d4d;
+    background: #ff4d4d;
+    color: #ffffff;
+}
+.stMetric {
+    border: 1px solid var(--kir-border);
+    border-radius: 18px;
+    background: var(--kir-surface);
+    padding: 1rem;
+}
+.element-container:has(.relationship-heading),
+.element-container:has(.analysis-context) {
+    margin-top: 0.2rem;
+}
+.stSelectbox div[data-baseweb="select"] > div {
+    height: auto;
+    min-height: 50px;
+    align-items: flex-start;
+    border-radius: 13px;
+    background: rgba(8, 13, 22, 0.86);
+    border-color: rgba(148, 163, 184, 0.20);
+}
+.stSelectbox div[data-baseweb="select"] div[role="combobox"],
+.stSelectbox div[data-baseweb="select"] div[role="combobox"] > div,
+.stSelectbox div[data-baseweb="select"] span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-overflow: clip;
+    line-height: 1.28;
+}
+.stSelectbox div[data-baseweb="select"] div[role="combobox"] {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+.stMultiSelect div[data-baseweb="select"] > div,
+.stNumberInput input,
+.stTextInput input {
+    border-radius: 13px;
+    background: rgba(8, 13, 22, 0.86);
+    border-color: rgba(148, 163, 184, 0.20);
+}
+</style>
+"""
+
+
+def format_percentile_card(label, item, metric_unit="", metric_label="\u041a\u0418\u0420"):
+    count_for_sentence = f"{int(item['count']):,}".replace(",", " ")
+    total_count = int(item.get("total_count", 0))
+    total_for_sentence = f"{total_count:,}".replace(",", " ")
     share = item.get("share")
     if share is None:
-        total_count = int(item.get("total_count", 0))
         share = int(item["count"]) / total_count if total_count else 0
+    is_percent_metric = metric_unit == "%"
     count_share = f"{float(share):.1%}"
-    direction = "\u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e" if "<=" in label else "\u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e"
+    threshold_value = (
+        f"{float(item['threshold']):,.2f}".replace(".", ",") if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
+    )
+    is_lower = "<=" in label
+    count_details = "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443" if is_lower else "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443"
+    opposite_count = max(total_count - int(item["count"]), 0)
+    opposite_for_sentence = f"{opposite_count:,}".replace(",", " ")
+    opposite_label = "\u0412\u044b\u0448\u0435 \u043f\u043e\u0440\u043e\u0433\u0430" if is_lower else "\u041d\u0438\u0436\u0435 \u043f\u043e\u0440\u043e\u0433\u0430"
+    threshold_display = f"{threshold_value} {metric_unit}".strip()
     return {
         "label": label,
-        "count": count,
+        "count": f"{int(item['count']):,}",
         "count_share": count_share,
+        "primary_value": count_for_sentence,
+        "count_details": count_details,
         "threshold_label": "\u041f\u043e\u0440\u043e\u0433 \u043c\u0435\u0442\u0440\u0438\u043a\u0438",
-        "threshold_value": _format_number(item["threshold"]),
+        "threshold_value": threshold_value,
         "threshold_unit": metric_unit,
-        "threshold_help": f"\u042d\u0442\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u041a\u0418\u0420, {direction} \u043a\u043e\u0442\u043e\u0440\u043e\u043c\u0443 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f {count} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.",
+        "threshold_help": f"\u041f\u043e\u0440\u043e\u0433: {threshold_display}. {opposite_label}: {opposite_for_sentence} \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: {total_for_sentence}.",
     }
 
 
@@ -488,35 +687,45 @@ def render_percentile_card_html(card, color):
     label = escape(str(card["label"]))
     count = escape(str(card["count"]))
     count_share = escape(str(card.get("count_share", "")))
+    primary_value = escape(str(card.get("primary_value", "")))
+    count_details = escape(str(card.get("count_details", "")))
     threshold_label = escape(str(card["threshold_label"]))
     threshold_value = escape(str(card["threshold_value"]))
     threshold_unit = escape(str(card.get("threshold_unit", "")))
     threshold_help = escape(str(card.get("threshold_help", "")))
     threshold_display = f"{threshold_value} {threshold_unit}".strip()
+    if primary_value:
+        share_html = (
+            f' <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>'
+            if count_share
+            else ""
+        )
+        primary_html = (
+            '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
+            f"{primary_value}{share_html}</div>"
+            '<div style="font-size:0.86rem;font-weight:720;color:rgba(255,255,255,0.60);margin-top:10px;">'
+            f"{count_details}</div>"
+        )
+    else:
+        primary_html = (
+            '<div style="font-size:2.05rem;font-weight:750;color:#ffffff;margin-top:22px;line-height:1;">'
+            f'{count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>'
+            "</div>"
+        )
+    threshold_html = (
+        '<div style="font-size:0.84rem;color:rgba(255,255,255,0.68);margin-top:18px;">'
+        f'{threshold_label} <span style="color:{color};font-weight:850;">{threshold_display}</span></div>'
+    )
     color = escape(str(color))
-    return f"""
-    <div style="
-        border: 1px solid {color};
-        border-left: 7px solid {color};
-        border-radius: 14px;
-        padding: 16px 18px;
-        background: linear-gradient(135deg, color-mix(in srgb, {color} 18%, transparent), rgba(255,255,255,0.025));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
-        min-height: 132px;
-    ">
-        <div style="font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.92);">{label}</div>
-        <div style="font-size: 2.05rem; font-weight: 750; color: #ffffff; margin-top: 22px; line-height: 1;">
-            {count} <span style="font-size:0.98rem;font-weight:760;color:rgba(255,255,255,0.58);">({count_share})</span>
-        </div>
-        <div style="font-size: 0.84rem; color: rgba(255,255,255,0.68); margin-top: 18px;">
-            {threshold_label}
-            <span style="color:{color};font-weight:850;">{threshold_display}</span>
-        </div>
-        <div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">
-            {threshold_help}
-        </div>
-    </div>
-    """
+    return (
+        f'<div style="border:1px solid {color};border-left:7px solid {color};border-radius:14px;'
+        f'padding:16px 18px;background:linear-gradient(135deg, color-mix(in srgb, {color} 18%, transparent), rgba(255,255,255,0.025));'
+        'box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);min-height:132px;">'
+        f'<div style="font-size:0.9rem;font-weight:700;color:rgba(255,255,255,0.92);">{label}</div>'
+        f"{primary_html}{threshold_html}"
+        '<div style="font-size:0.74rem;line-height:1.32;color:rgba(255,255,255,0.48);margin-top:8px;max-width:360px;">'
+        f"{threshold_help}</div></div>"
+    )
 
 
 def metric_bar_value_column(bin_table):
@@ -603,6 +812,12 @@ def prepare_bin_chart_table(bin_table):
 
     chart_table["bin_mid"] = (pd.to_numeric(chart_table["bin_start"]) + pd.to_numeric(chart_table["bin_end"])) / 2
     chart_table["bar_width"] = pd.to_numeric(chart_table["bin_end"]) - pd.to_numeric(chart_table["bin_start"])
+    tail_mask = chart_table["bin"].astype(str).str.startswith("Tail:")
+    if tail_mask.any():
+        regular_widths = chart_table.loc[~tail_mask, "bar_width"]
+        visual_width = float(regular_widths[regular_widths.gt(0)].median()) if regular_widths.gt(0).any() else 1.0
+        chart_table.loc[tail_mask, "bar_width"] = visual_width
+        chart_table.loc[tail_mask, "bin_mid"] = pd.to_numeric(chart_table.loc[tail_mask, "bin_start"]) + visual_width / 2
     return chart_table
 
 
@@ -619,7 +834,7 @@ def build_bin_table(series, bins=20):
     return table
 
 
-def build_bin_table_by_width(series, bin_width, store_series=None):
+def build_bin_table_by_width(series, bin_width, store_series=None, max_bins=2000):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return pd.DataFrame(columns=["bin_start", "bin_end", "bin", "count", "store_count", "share"])
@@ -632,18 +847,28 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
     max_value = float(numeric.max())
     start = (min_value // bin_width) * bin_width
     end = ((max_value // bin_width) + 1) * bin_width
-    edges = list(_frange(start, end + bin_width, bin_width))
+    bin_count = int(math.ceil((end - start) / bin_width))
+    has_tail = bin_count > int(max_bins)
+    if has_tail:
+        regular_bin_count = max(int(max_bins) - 1, 1)
+        tail_start = start + regular_bin_count * bin_width
+        edges = [start + index * bin_width for index in range(regular_bin_count + 1)]
+    else:
+        tail_start = None
+        edges = [start + index * bin_width for index in range(bin_count + 1)]
     source = pd.DataFrame({"metric": pd.to_numeric(series, errors="coerce")})
     if store_series is not None:
         source["store"] = store_series
     source = source.dropna(subset=["metric"])
-    source["bin_interval"] = pd.cut(source["metric"], bins=edges, right=False, include_lowest=True)
-    counts = source["bin_interval"].value_counts(sort=False)
+    regular_source = source[source["metric"].lt(tail_start)].copy() if has_tail else source
+    source_for_cut = regular_source if has_tail else source
+    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True)
+    counts = source_for_cut["bin_interval"].value_counts(sort=False)
 
     rows = []
-    total = int(counts.sum())
+    total = int(len(source))
     for interval, count in counts.items():
-        bin_rows = source[source["bin_interval"] == interval]
+        bin_rows = source_for_cut[source_for_cut["bin_interval"] == interval]
         store_count = int(bin_rows["store"].nunique()) if "store" in bin_rows.columns else int(count)
         rows.append(
             {
@@ -655,23 +880,73 @@ def build_bin_table_by_width(series, bin_width, store_series=None):
                 "share": float(count / total) if total else 0,
             }
         )
+    if has_tail:
+        tail = source[source["metric"].ge(tail_start)]
+        tail_count = int(len(tail))
+        tail_store_count = int(tail["store"].nunique()) if "store" in tail.columns else tail_count
+        rows.append(
+            {
+                "bin_start": _clean_number(tail_start),
+                "bin_end": _clean_number(max_value),
+                "bin": f"Tail: >= {_clean_number(tail_start)}",
+                "count": tail_count,
+                "store_count": tail_store_count,
+                "share": float(tail_count / total) if total else 0,
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def default_bin_width(series, target_bins=30, minimum=1, maximum=1000):
+def _nice_width(raw_width):
+    if raw_width <= 0:
+        return 1.0
+    exponent = math.floor(math.log10(raw_width))
+    scale = 10**exponent
+    normalized = raw_width / scale
+    if normalized <= 1:
+        multiplier = 1
+    elif normalized <= 2:
+        multiplier = 2
+    elif normalized <= 5:
+        multiplier = 5
+    else:
+        multiplier = 10
+    return multiplier * scale
+
+
+def default_bin_width(series, target_bins=30, minimum=1, maximum=1000, upper_quantile=None):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
         return float(minimum)
-    span = float(numeric.max() - numeric.min())
+    upper = numeric.quantile(float(upper_quantile)) if upper_quantile is not None else numeric.max()
+    span = float(upper - numeric.min())
     raw_width = span / target_bins
     if raw_width <= minimum:
         return float(minimum)
-    nice_width = 10 ** math.ceil(math.log10(raw_width))
+    nice_width = _nice_width(raw_width) if upper_quantile is not None else 10 ** math.ceil(math.log10(raw_width))
     return float(min(max(nice_width, float(minimum)), float(maximum)))
 
 
 def adjust_bin_width(current, delta, minimum=1):
-    return max(float(minimum), float(current) + float(delta))
+    return round(max(float(minimum), float(current) + float(delta)), 10)
+
+
+def bin_width_settings(is_percent_metric=False):
+    if is_percent_metric:
+        return {
+            "minimum": 0.01,
+            "maximum": 5.0,
+            "step": 0.01,
+            "buttons": [("-0.01", -0.01), ("+0.01", 0.01), ("-0.1", -0.1), ("+0.1", 0.1), ("-1", -1), ("+1", 1)],
+            "upper_quantile": 0.99,
+        }
+    return {
+        "minimum": 1.0,
+        "maximum": 1000.0,
+        "step": 1.0,
+        "buttons": [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+        "upper_quantile": None,
+    }
 
 
 def _format_setting_number(value):
@@ -687,8 +962,12 @@ def chart_settings_summary(bin_width, custom_percentile, hide_zero_values=False,
     return f"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin {_format_setting_number(bin_width)}, P{int(custom_percentile)}, {zero_text}, {tail_text}"
 
 
-def _adjust_session_bin_width(key, delta):
-    st.session_state[key] = adjust_bin_width(st.session_state.get(key, 1), delta)
+def _adjust_session_bin_width(key, delta, minimum=1):
+    st.session_state[key] = adjust_bin_width(st.session_state.get(key, minimum), delta, minimum=minimum)
+
+
+def set_session_value(key, value):
+    st.session_state[key] = value
 
 
 def first_bins_store_sum(bin_table, n_bins):
@@ -703,6 +982,38 @@ def first_bins_store_sum(bin_table, n_bins):
         "store_sum": int(first_bins[store_column].sum()),
         "row_sum": int(first_bins["count"].sum()) if "count" in first_bins.columns else 0,
     }
+
+
+def first_bin_count_for_target_share(bin_table, target_share):
+    if bin_table.empty:
+        return 0
+    store_column = "store_count" if "store_count" in bin_table.columns else "count"
+    counts = pd.to_numeric(bin_table[store_column], errors="coerce").fillna(0)
+    total = float(counts.sum())
+    if total <= 0:
+        return 0
+    target_share = min(max(float(target_share), 0.0), 1.0)
+    target_count = total * target_share
+    cumulative = counts.cumsum()
+    matching = cumulative[cumulative.ge(target_count)]
+    if matching.empty:
+        return int(len(bin_table))
+    return int(matching.index[0]) + 1
+
+
+def recommended_bin_width_for_target_share(metric_series, target_share, bins_used, current_bin_width, minimum=0.01):
+    numeric = pd.to_numeric(metric_series, errors="coerce").dropna()
+    if numeric.empty or int(bins_used) <= 0:
+        return None
+    current_bin_width = float(current_bin_width)
+    if current_bin_width <= 0:
+        return None
+    start = (float(numeric.min()) // current_bin_width) * current_bin_width
+    target_value = float(numeric.quantile(min(max(float(target_share), 0.0), 1.0)))
+    width = (target_value - start) / int(bins_used)
+    if width <= 0:
+        return float(minimum)
+    return round(max(float(minimum), width), 4)
 
 
 def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):
@@ -765,7 +1076,8 @@ def percentile_store_counts(series, custom_percentile, store_series=None):
 def split_by_network(df):
     if TS_COL not in df.columns:
         return [("All", df)]
-    return [(str(name), group.copy()) for name, group in sorted(df.groupby(TS_COL, dropna=False), key=lambda item: str(item[0]))]
+    network_key = df[TS_COL].astype("string").fillna("\u0411\u0435\u0437 \u0422\u0421")
+    return [(str(name), group.copy()) for name, group in sorted(df.groupby(network_key), key=lambda item: str(item[0]))]
 
 
 def filter_visual_outliers(df, x_col, y_col, quantile=0.99):
@@ -1076,16 +1388,31 @@ def _render_audit_tab(run_dir, filtered, numeric_metric):
         st.warning("merge_diagnostics.md not found for this run.")
 
 
-def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=None):
-    st.subheader("Metric analysis")
-    bin_width_key = f"bin_width_v2_{metric}"
-    hide_zero_key = f"hide_zero_metric_values_{metric}"
-    custom_percentile_key = f"custom_percentile_{metric}"
-    collapse_tail_key = f"collapse_tail_bins_{metric}"
-    tail_bins_key = f"tail_bins_to_keep_{metric}"
+def _render_metric_analysis_tab(
+    filtered,
+    metric,
+    numeric_metric,
+    filter_values=None,
+    title="Metric analysis",
+    key_prefix="metric",
+    metric_label="КИР",
+    is_percent_metric=False,
+):
+    st.subheader(title)
+    bin_width_key = f"{key_prefix}_bin_width_v2_{metric}"
+    hide_zero_key = f"{key_prefix}_hide_zero_metric_values_{metric}"
+    custom_percentile_key = f"{key_prefix}_custom_percentile_{metric}"
+    collapse_tail_key = f"{key_prefix}_collapse_tail_bins_{metric}"
+    tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
+    width_settings = bin_width_settings(is_percent_metric=is_percent_metric)
 
     if bin_width_key not in st.session_state:
-        st.session_state[bin_width_key] = default_bin_width(numeric_metric)
+        st.session_state[bin_width_key] = default_bin_width(
+            numeric_metric,
+            minimum=width_settings["minimum"],
+            maximum=width_settings["maximum"],
+            upper_quantile=width_settings["upper_quantile"],
+        )
     if hide_zero_key not in st.session_state:
         st.session_state[hide_zero_key] = False
     if custom_percentile_key not in st.session_state:
@@ -1121,9 +1448,14 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
     for container, card, color in zip(
         [pc1, pc2, pc3],
         [
-            format_percentile_card("Stores <= P25", percentile_counts["p25"], metric_unit=metric_unit),
-            format_percentile_card("Stores >= P85", percentile_counts["p85"], metric_unit=metric_unit),
-            format_percentile_card(f"Stores >= P{custom_percentile}", percentile_counts["custom"], metric_unit=metric_unit),
+            format_percentile_card("Stores <= P25", percentile_counts["p25"], metric_unit=metric_unit, metric_label=metric_label),
+            format_percentile_card("Stores >= P85", percentile_counts["p85"], metric_unit=metric_unit, metric_label=metric_label),
+            format_percentile_card(
+                f"Stores >= P{custom_percentile}",
+                percentile_counts["custom"],
+                metric_unit=metric_unit,
+                metric_label=metric_label,
+            ),
         ],
         ["#2fbf71", "#ff4d4d", "#f59f00"],
     ):
@@ -1140,19 +1472,25 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
         )
         bin_width = st.number_input(
             "Bin width",
-            min_value=1.0,
-            step=1.0,
+            min_value=width_settings["minimum"],
+            step=width_settings["step"],
             key=bin_width_key,
         )
         step_columns = st.columns(6)
         for column, (label, delta) in zip(
             step_columns,
-            [("-10", -10), ("+10", 10), ("-100", -100), ("+100", 100), ("-1000", -1000), ("+1000", 1000)],
+            width_settings["buttons"],
         ):
-            column.button(label, key=f"{bin_width_key}_{label}", on_click=_adjust_session_bin_width, args=(bin_width_key, delta))
+            column.button(
+                label,
+                key=f"{bin_width_key}_{label}",
+                on_click=_adjust_session_bin_width,
+                args=(bin_width_key, delta, width_settings["minimum"]),
+            )
         custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
 
-        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series)
+        max_bin_count = 500 if is_percent_metric else 2000
+        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
         chart_bin_table = bin_table
         if len(bin_table) > 3:
             collapse_tail = st.checkbox(
@@ -1209,7 +1547,55 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
     st.subheader("Bin table")
     if not bin_table.empty:
         max_bins = len(bin_table)
-        n_bins = st.number_input("Sum first N bins", min_value=1, max_value=max_bins, value=min(3, max_bins), step=1)
+        sum_mode = st.radio(
+            "How to choose first bins",
+            ["By bin count", "By store share"],
+            horizontal=True,
+            key=f"{key_prefix}_first_bins_mode_{metric}",
+        )
+        if sum_mode == "By store share":
+            target_share_percent = st.number_input(
+                "Target % of stores",
+                min_value=0.1,
+                max_value=100.0,
+                value=30.0,
+                step=0.1,
+                key=f"{key_prefix}_first_bins_target_share_{metric}",
+            )
+            n_bins = first_bin_count_for_target_share(bin_table, target_share_percent / 100)
+            previous_bins = first_bins_summary(numeric_metric, bin_table, n_bins - 1, store_series=store_series) if n_bins > 1 else None
+            recommended_width = recommended_bin_width_for_target_share(
+                numeric_metric,
+                target_share_percent / 100,
+                n_bins,
+                bin_width,
+                minimum=width_settings["minimum"],
+            )
+            st.caption(
+                f"Selected {n_bins} first bins because this mode uses the first bin count that reaches at least "
+                f"{target_share_percent:.1f}% of stores."
+            )
+            if previous_bins:
+                st.caption(f"Previous {n_bins - 1} bins cover {previous_bins['store_share']:.1%} of stores.")
+            if recommended_width is not None:
+                rec_col, apply_col = st.columns([3, 1])
+                rec_col.info(f"Recommended bin width for this target: {_format_setting_number(recommended_width)}")
+                apply_col.button(
+                    "Apply bin width",
+                    key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
+                    on_click=set_session_value,
+                    args=(bin_width_key, recommended_width),
+                    help="Applies the recommended value to Bin width in chart settings.",
+                )
+        else:
+            n_bins = st.number_input(
+                "Sum first N bins",
+                min_value=1,
+                max_value=max_bins,
+                value=min(3, max_bins),
+                step=1,
+                key=f"{key_prefix}_first_bins_count_{metric}",
+            )
         first_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
         sum_col1, sum_col2 = st.columns(2)
         sum_col1.metric("First bins used", first_bins["bins_used"])
@@ -1220,6 +1606,66 @@ def _render_metric_analysis_tab(filtered, metric, numeric_metric, filter_values=
             delta_color="off",
         )
     st.dataframe(bin_table, use_container_width=True)
+
+
+def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
+    st.subheader("Проценты КИР")
+    source = add_kir_percentage_columns(filtered)
+    kir_columns = kir_metric_columns(source)
+    base_columns = [column for column in PERCENT_BASE_COLUMNS if column in source.columns]
+    if not kir_columns:
+        st.info("Нет числовых КИР-показателей для расчета процентов.")
+        return
+    if not base_columns:
+        st.info("Нет колонок Списания, Выручка или Свободный ТЗ для расчета процентов.")
+        return
+
+    default_metric = selected_metric if selected_metric in kir_columns else kir_columns[0]
+    applied_settings = resolve_kir_percent_settings(
+        st.session_state.get("kir_percent_settings"),
+        kir_columns,
+        base_columns,
+        default_metric,
+    )
+    with st.form("kir_percent_settings_form"):
+        draft_kir = st.selectbox(
+            "КИР-показатель для анализа процентов",
+            kir_columns,
+            index=kir_columns.index(applied_settings["metric"]),
+        )
+        draft_base = st.radio(
+            "С чем сравниваем КИР",
+            base_columns,
+            horizontal=True,
+            index=base_columns.index(applied_settings["base"]),
+        )
+        if st.form_submit_button("Apply percentage settings"):
+            applied_settings = {"metric": draft_kir, "base": draft_base}
+            st.session_state["kir_percent_settings"] = applied_settings
+
+    selected_kir = applied_settings["metric"]
+    selected_base = applied_settings["base"]
+    percent_metric = percentage_column_name(selected_kir, selected_base)
+    if percent_metric not in source.columns:
+        st.info(f"Не удалось рассчитать колонку: {percent_metric}")
+        return
+
+    st.caption(f"Формула: {selected_kir} / {selected_base} * 100. Значение 12.5 означает 12.5%.")
+    st.subheader("Сводная таблица по суммам")
+    summary = kir_percentage_summary(source, selected_kir)
+    st.dataframe(format_kir_summary_display(summary), use_container_width=True)
+
+    numeric_percent = pd.to_numeric(source[percent_metric], errors="coerce")
+    _render_metric_analysis_tab(
+        source,
+        percent_metric,
+        numeric_percent,
+        filter_values=filter_values,
+        title="Распределение процента по бинам",
+        key_prefix="kir_percent",
+        metric_label="процента КИР",
+        is_percent_metric=True,
+    )
 
 
 def _render_group_comparison_tab(filtered, numeric_metric):
@@ -1326,9 +1772,43 @@ def _format_number(value):
     return f"{value:,.2f}"
 
 
+def format_kir_summary_amount(value):
+    if value is None or pd.isna(value):
+        return ""
+    return f"{float(value):,.0f}".replace(",", " ")
+
+
+def format_kir_summary_percent(value):
+    if value is None or pd.isna(value):
+        return ""
+    return f"{float(value):,.1f}%".replace(",", " ")
+
+
+def format_kir_summary_display(summary):
+    display = summary.copy()
+    for column in KIR_SUMMARY_AMOUNT_COLUMNS:
+        if column in display.columns:
+            display[column] = display[column].map(format_kir_summary_amount)
+    for column in display.columns:
+        if str(column).startswith("КИР / ") and str(column).endswith(", %"):
+            display[column] = display[column].map(format_kir_summary_percent)
+    return display
+
+
+def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_metric):
+    metric = (settings or {}).get("metric")
+    base = (settings or {}).get("base")
+    if metric not in kir_columns:
+        metric = default_metric if default_metric in kir_columns else kir_columns[0]
+    if base not in base_columns:
+        base = base_columns[0]
+    return {"metric": metric, "base": base}
+
+
 def main():
     _require_streamlit()
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
+    st.markdown(dashboard_css(), unsafe_allow_html=True)
     st.title("KIR Dashboard")
 
     is_running = st.session_state.get("pipeline_running", False)
@@ -1586,6 +2066,7 @@ def main():
     df = _load_run_dataframe(run_dir)
     if df is None:
         return
+    df = add_kir_percentage_columns(df)
 
     metrics = sort_metric_columns(get_numeric_metric_columns(df))
     if not metrics:
@@ -1628,21 +2109,24 @@ def main():
     if metric not in metrics:
         metric = metrics[0]
     filtered = apply_filter_values(df, settings.get("filters", {}))
+    problem_filtered = apply_filter_values(df, settings.get("filters", {}), exclude_total_rows=False)
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
-    screen = st.radio("Dashboard screen", DASHBOARD_SCREENS, horizontal=True)
-    if screen == "Overview":
-        _render_audit_tab(run_dir, filtered, numeric_metric)
-    elif screen == "Metric analysis":
-        _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
-    elif screen == "Group comparison":
-        _render_group_comparison_tab(filtered, numeric_metric)
-    elif screen == "Poteri relationships":
+    screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
+    if screen == "1. Корреляции":
         _render_relationships_tab(filtered, metric, numeric_metric)
-    elif screen == "Problem rows":
-        _render_problem_rows_tab(filtered)
-    elif screen == "Data":
-        st.subheader("Filtered data sample")
+    elif screen == "2. Проценты КИР":
+        _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
+    elif screen == "3. Распределение показателя":
+        _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
+    elif screen == "Сравнение групп":
+        _render_group_comparison_tab(filtered, numeric_metric)
+    elif screen == "Качество данных":
+        _render_audit_tab(run_dir, filtered, numeric_metric)
+    elif screen == "Проблемные строки":
+        _render_problem_rows_tab(problem_filtered)
+    elif screen == "Данные":
+        st.subheader("Пример отфильтрованных данных")
         st.dataframe(filtered.head(1000), use_container_width=True)
 
 

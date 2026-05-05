@@ -14,11 +14,13 @@ from dashboard_streamlit import (
     format_run_result,
     format_running_message,
     metric_analysis_context,
+    _problem_rows,
     render_metric_analysis_context_html,
     render_correlation_interpretation_html,
     pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
+    dashboard_css,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
@@ -187,6 +189,31 @@ def test_render_metric_analysis_context_html_wraps_long_metric_names():
     assert "white-space:nowrap" not in html
 
 
+def test_dashboard_css_wraps_long_selectbox_values():
+    css = dashboard_css()
+
+    assert ".stSelectbox" in css
+    assert "radial-gradient" in css
+    assert "linear-gradient" in css
+    assert 'data-testid="stAppViewContainer"' in css
+    assert 'data-testid="stSidebar"' in css
+    assert "border-radius: 18px" in css
+    assert "rgba(15, 23, 42" in css
+    assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label" in css
+    assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label:has(input:checked)" in css
+    assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label > div:first-child" in css
+    assert "[data-testid=\"stRadio\"] label {" not in css
+    assert "display: none" in css
+    assert "justify-content: center" in css
+    assert "[data-testid=\"stRadio\"] div[role=\"radiogroup\"] label p" in css
+    assert "line-height: 1" in css
+    assert "white-space: normal" in css
+    assert "overflow-wrap: anywhere" in css
+    assert "text-overflow: clip" in css
+    assert "height: auto" in css
+    assert "text-overflow: ellipsis" not in css
+
+
 def test_filter_zero_metric_values_removes_only_numeric_zero_rows():
     df = pd.DataFrame({"metric": [0, "0", 1, None, "bad"], "label": ["a", "b", "c", "d", "e"]})
     numeric_metric = pd.to_numeric(df["metric"], errors="coerce")
@@ -215,18 +242,49 @@ def test_apply_filter_values_filters_only_selected_columns():
     assert filtered["value"].tolist() == [10, 20]
 
 
+def test_apply_filter_values_excludes_total_rows_by_default_for_analytics():
+    df = pd.DataFrame({"value": [10, 20, 30], "is_total_row": [False, True, False]})
+
+    filtered = apply_filter_values(df, {})
+
+    assert filtered["value"].tolist() == [10, 30]
+
+
+def test_apply_filter_values_can_keep_total_rows_for_problem_rows():
+    df = pd.DataFrame({"value": [10, 20, 30], "is_total_row": [False, True, False]})
+
+    filtered = apply_filter_values(df, {}, exclude_total_rows=False)
+
+    assert filtered["value"].tolist() == [10, 20, 30]
+
+
+def test_problem_rows_include_source_total_rows():
+    df = pd.DataFrame(
+        {
+            "value": [10, 20],
+            "has_poteri_match": [True, True],
+            "has_missing_key": [False, False],
+            "has_duplicate_kir_key": [False, False],
+            "has_duplicate_poteri_key": [False, False],
+            "is_total_row": [False, True],
+        }
+    )
+
+    problems = _problem_rows(df)
+
+    assert problems["value"].tolist() == [20]
+
+
 def test_format_percentile_card_separates_count_from_threshold():
     card = format_percentile_card("Stores >= P85", {"count": 21140, "total_count": 26213, "threshold": 4197.33}, metric_unit="руб")
 
-    assert card == {
-        "label": "Stores >= P85",
-        "count": "21,140",
-        "count_share": "80.6%",
-        "threshold_label": "Порог метрики",
-        "threshold_value": "4,197.33",
-        "threshold_unit": "руб",
-        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
-    }
+    assert card["primary_value"] == "21 140"
+    assert card["count_share"] == "80.6%"
+    assert card["count_details"] == "магазинов выше или равно порогу"
+    assert card["threshold_label"] == "Порог метрики"
+    assert card["threshold_value"] == "4,197.33"
+    assert card["threshold_unit"] == "руб"
+    assert card["threshold_help"] == "Порог: 4,197.33 руб. Ниже порога: 5 073 магазинов. Всего в выборке: 26 213."
 
 
 def test_format_percentile_card_explains_lower_threshold_direction():
@@ -234,38 +292,69 @@ def test_format_percentile_card_explains_lower_threshold_direction():
 
     assert card["threshold_unit"] == "шт"
     assert card["count_share"] == "24.8%"
-    assert card["threshold_help"] == "Это значение КИР, ниже или равно которому находится 6,498 магазинов."
+    assert card["primary_value"] == "6 498"
+    assert card["count_details"] == "магазинов ниже или равно порогу"
+    assert card["threshold_help"] == "Порог: 0.00 шт. Выше порога: 19 715 магазинов. Всего в выборке: 26 213."
+
+
+def test_format_percentile_card_for_percent_metric_uses_business_percent_format():
+    card = format_percentile_card(
+        "Stores >= P85",
+        {"count": 3724, "total_count": 24825, "threshold": 1.389432},
+        metric_unit="%",
+        metric_label="процента КИР",
+    )
+
+    assert card["primary_value"] == "3 724"
+    assert card["count_share"] == "15.0%"
+    assert card["count_details"] == "магазинов выше или равно порогу"
+    assert card["threshold_value"] == "1,39"
+    assert card["threshold_unit"] == "%"
+    assert card["threshold_help"] == "Порог: 1,39 %. Ниже порога: 21 101 магазинов. Всего в выборке: 24 825."
 
 
 def test_metric_unit_for_metric_detects_rubles_and_units():
     assert metric_unit_for_metric("КИР-950, руб. без НДС") == "руб"
     assert metric_unit_for_metric("КИР-950, шт") == "шт"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, руб. без НДС") == "руб"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, шт") == "шт"
+    assert metric_unit_for_metric("КИР-950. Промо ниже 60% от прогноза, руб. без НДС / Выручка, %") == "%"
     assert metric_unit_for_metric("КИР-950") == ""
 
 
 def test_render_percentile_card_html_includes_soft_percentile_color():
-    card = {
-        "label": "Stores >= P85",
-        "count": "21,140",
-        "count_share": "80.6%",
-        "threshold_label": "Порог метрики",
-        "threshold_value": "4,197.33",
-        "threshold_unit": "руб",
-        "threshold_help": "Это значение КИР, выше или равно которому находится 21,140 магазинов.",
-    }
+    card = format_percentile_card(
+        "Stores >= P85",
+        {"count": 21140, "total_count": 26213, "threshold": 4197.33},
+        metric_unit="руб",
+    )
 
     html = render_percentile_card_html(card, "#ff4d4d")
 
     assert "Stores &gt;= P85" in html
-    assert "21,140" in html
+    assert "21 140" in html
     assert "(80.6%)" in html
+    assert "магазинов выше или равно порогу" in html
     assert "Порог метрики" in html
     assert "Threshold" not in html
     assert "info-icon" not in html
     assert 'title="' not in html
-    assert "Это значение КИР, выше или равно которому находится 21,140 магазинов." in html
     assert '<span style="color:#ff4d4d;font-weight:850;">4,197.33 руб</span>' in html
     assert "#ff4d4d" in html
+
+
+def test_render_percentile_card_html_has_no_indented_html_code_blocks():
+    card = format_percentile_card(
+        "Stores <= P25",
+        {"count": 6207, "total_count": 24825, "threshold": 0.6843},
+        metric_unit="%",
+        metric_label="процента КИР",
+    )
+
+    html = render_percentile_card_html(card, "#2fbf71")
+
+    assert "\n    <div" not in html
+    assert "\n        <div" not in html
 
 
 def test_metric_bar_value_column_prefers_unique_store_counts():
@@ -841,17 +930,27 @@ def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
     assert [call for call in calls if call[0] == "read"] == [("read", str(path), 123)]
 
 
-from dashboard_streamlit import DASHBOARD_SCREENS, sample_for_plot
+from dashboard_streamlit import (
+    DASHBOARD_SCREENS,
+    build_bin_table_by_width,
+    default_bin_width,
+    adjust_bin_width,
+    format_kir_summary_amount,
+    format_kir_summary_display,
+    prepare_bin_chart_table,
+    sample_for_plot,
+)
 
 
 def test_dashboard_screens_match_tz_sections():
     assert DASHBOARD_SCREENS == [
-        "Overview",
-        "Metric analysis",
-        "Group comparison",
-        "Poteri relationships",
-        "Problem rows",
-        "Data",
+        "1. Корреляции",
+        "2. Проценты КИР",
+        "3. Распределение показателя",
+        "Сравнение групп",
+        "Качество данных",
+        "Проблемные строки",
+        "Данные",
     ]
 
 
@@ -862,6 +961,71 @@ def test_sample_for_plot_limits_large_dataframes():
 
     assert len(sampled) == 10
     assert sampled["value"].tolist() == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+
+
+def test_default_bin_width_can_ignore_extreme_percent_tail():
+    series = pd.Series([0.0, 0.1, 0.2, 0.5, 1.0, 2.0] * 100 + [30000.0])
+
+    width = default_bin_width(series, minimum=0.01, maximum=5.0, upper_quantile=0.99)
+
+    assert 0.01 <= width <= 1.0
+
+
+def test_adjust_bin_width_supports_fractional_percent_steps():
+    assert adjust_bin_width(0.2, 0.1, minimum=0.01) == 0.3
+    assert adjust_bin_width(0.2, -0.1, minimum=0.01) == 0.1
+    assert adjust_bin_width(0.01, -0.1, minimum=0.01) == 0.01
+
+
+def test_build_bin_table_by_width_caps_huge_bin_counts_with_tail():
+    series = pd.Series([0.0, 0.1, 0.2, 10000.0])
+
+    table = build_bin_table_by_width(series, bin_width=0.1, max_bins=10)
+
+    assert len(table) == 10
+    assert table.iloc[-1]["bin"].startswith("Tail:")
+    assert table.iloc[-1]["count"] == 1
+
+
+def test_prepare_bin_chart_table_draws_tail_as_compact_bar():
+    table = pd.DataFrame(
+        [
+            {"bin_start": 0.0, "bin_end": 1.0, "bin": "0 - 1", "count": 10, "store_count": 10, "share": 0.5},
+            {"bin_start": 1.0, "bin_end": 2.0, "bin": "1 - 2", "count": 8, "store_count": 8, "share": 0.4},
+            {"bin_start": 2.0, "bin_end": 100000.0, "bin": "Tail: >= 2", "count": 2, "store_count": 2, "share": 0.1},
+        ]
+    )
+
+    chart = prepare_bin_chart_table(table)
+
+    assert chart.loc[2, "bar_width"] == 1.0
+    assert chart.loc[2, "bin_mid"] == 2.5
+
+
+def test_format_kir_summary_display_formats_amounts_without_decimals():
+    summary = pd.DataFrame(
+        {
+            "Категория": ["Бакалея", None],
+            "Сумма КИР": [1936376253.9925, None],
+            "Сумма списаний": [295312091.9, None],
+            "КИР / Списания, %": [264.8659, None],
+            "Сумма выручки": [34933625180.27, None],
+        }
+    )
+
+    display = format_kir_summary_display(summary)
+
+    assert display.loc[0, "Сумма КИР"] == "1 936 376 254"
+    assert display.loc[0, "Сумма списаний"] == "295 312 092"
+    assert display.loc[0, "Сумма выручки"] == "34 933 625 180"
+    assert display.loc[1, "Сумма КИР"] == ""
+    assert display.loc[0, "КИР / Списания, %"] == "264.9%"
+    assert display.loc[1, "КИР / Списания, %"] == ""
+
+
+def test_format_kir_summary_amount_handles_empty_values():
+    assert format_kir_summary_amount(None) == ""
+    assert format_kir_summary_amount(float("nan")) == ""
 
 
 def test_metric_analysis_does_not_render_boxplot():
@@ -902,13 +1066,17 @@ from dashboard_streamlit import (
     build_bin_table_by_width,
     default_bin_width,
     filter_visual_outliers,
+    first_bin_count_for_target_share,
     first_bins_store_sum,
     first_bins_summary,
+    recommended_bin_width_for_target_share,
+    set_session_value,
     relationship_chart_rows,
     relationship_heading_html,
     percentile_store_counts,
     prepare_correlation_display_stats,
     split_by_network,
+    resolve_kir_percent_settings,
 )
 
 
@@ -964,6 +1132,16 @@ def test_split_by_network_returns_one_frame_per_ts():
 
     assert [name for name, _ in groups] == ["A", "B"]
     assert [len(group) for _, group in groups] == [1, 2]
+
+
+def test_split_by_network_handles_missing_ts_without_pandas_categorical_error():
+    df = pd.DataFrame({TS_COL: ["B", None, "A", float("nan")], "value": [1, 2, 3, 4]})
+
+    groups = split_by_network(df)
+
+    assert [name for name, _ in groups] == ["A", "B", "Без ТС"]
+    missing_group = dict(groups)["Без ТС"]
+    assert missing_group["value"].tolist() == [2, 4]
 
 
 def test_filter_visual_outliers_trims_extreme_x_and_y_values_without_mutating_source():
@@ -1032,6 +1210,55 @@ def test_first_bins_store_sum_clamps_requested_bin_count_to_table_size():
     result = first_bins_store_sum(table, 10)
 
     assert result == {"bins_used": 2, "store_sum": 150, "row_sum": 150}
+
+
+def test_first_bin_count_for_target_share_returns_minimum_bins_covering_share():
+    table = pd.DataFrame({"count": [100, 50, 25], "store_count": [10, 5, 2]})
+
+    assert first_bin_count_for_target_share(table, 0.70) == 2
+    assert first_bin_count_for_target_share(table, 1.00) == 3
+    assert first_bin_count_for_target_share(table, 0) == 1
+
+
+def test_recommended_bin_width_for_target_share_aligns_target_boundary_to_used_bins():
+    metric = pd.Series(range(101))
+
+    recommendation = recommended_bin_width_for_target_share(metric, target_share=0.40, bins_used=8, current_bin_width=10)
+
+    assert recommendation == 5.0
+
+
+def test_set_session_value_updates_target_key(monkeypatch):
+    import dashboard_streamlit
+
+    fake_state = {}
+    monkeypatch.setattr(dashboard_streamlit.st, "session_state", fake_state)
+
+    set_session_value("bin_width", 947.76)
+
+    assert fake_state["bin_width"] == 947.76
+
+
+def test_resolve_kir_percent_settings_keeps_valid_applied_values():
+    result = resolve_kir_percent_settings(
+        {"metric": "КИР-2", "base": "Выручка"},
+        ["КИР-1", "КИР-2"],
+        ["Списания", "Выручка"],
+        default_metric="КИР-1",
+    )
+
+    assert result == {"metric": "КИР-2", "base": "Выручка"}
+
+
+def test_resolve_kir_percent_settings_falls_back_when_applied_values_are_missing():
+    result = resolve_kir_percent_settings(
+        {"metric": "missing", "base": "missing"},
+        ["КИР-1", "КИР-2"],
+        ["Списания", "Выручка"],
+        default_metric="КИР-2",
+    )
+
+    assert result == {"metric": "КИР-2", "base": "Списания"}
 
 
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():

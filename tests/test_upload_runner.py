@@ -111,7 +111,7 @@ def test_run_project_route_uses_project_uploads_and_run_directory(tmp_path):
     def fake_merge(kir_df, poteri_df, merge_key, rename_map):
         calls["merge_key"] = merge_key
         calls["rename_map"] = rename_map
-        return pd.DataFrame({"value": [1]}), {"raw_row_count": 1}
+        return pd.DataFrame({"КИР-950 руб": [25.0], "Списания": [200.0], "Выручка": [100.0], "Свободный ТЗ": [50.0]}), {"raw_row_count": 1}
 
     def fake_add_flags(raw_df):
         result = raw_df.copy()
@@ -124,6 +124,8 @@ def test_run_project_route_uses_project_uploads_and_run_directory(tmp_path):
     def fake_write_outputs(run_dir, raw_df, final_df, excluded_df, diagnostics):
         calls["run_dir"] = run_dir
         calls["diagnostics"] = diagnostics
+        calls["final_columns"] = list(final_df.columns)
+        calls["final_df"] = final_df.copy()
         return {"final_clean": run_dir / "final_clean_data.xlsx", "merged_raw": run_dir / "merged_raw.xlsx"}
 
     result = run_project_route(
@@ -145,6 +147,8 @@ def test_run_project_route_uses_project_uploads_and_run_directory(tmp_path):
     assert calls["run_dir"] == tmp_path / "003" / "runs" / "run_001_route_1"
     assert calls["diagnostics"]["project_name"] == "003"
     assert calls["diagnostics"]["route"] == "route_1"
+    assert "КИР-950 руб / Выручка, %" in calls["final_columns"]
+    assert calls["final_df"].loc[0, "КИР-950 руб / Выручка, %"] == 25.0
     assert result["route"] == "route_1"
     assert result["run_dir"] == tmp_path / "003" / "runs" / "run_001_route_1"
 
