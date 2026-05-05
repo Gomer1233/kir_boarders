@@ -25,6 +25,7 @@ from dashboard_streamlit import (
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
+    bin_width_settings,
     calculate_relationship_stats,
     chart_settings_summary,
     collapse_tail_bins,
@@ -1132,6 +1133,16 @@ def test_bin_width_apply_button_uses_single_clear_business_action():
     assert '"Apply bin width"' not in source
     assert "Подогнать bin width под выбранный % магазинов" in source
     assert "Цель: {target_share_percent:.1f}% магазинов." in source
+    assert 'format=width_settings["format"]' in source
+    assert "Это минимальное количество первых бинов" in source
+    assert "Применяйте, только если хотите точнее подогнать ширину бина под цель." in source
+
+
+def test_percent_bin_width_settings_allow_four_decimal_precision():
+    settings = bin_width_settings(is_percent_metric=True)
+
+    assert settings["step"] == 0.0001
+    assert settings["format"] == "%.4f"
 
 
 def test_dashboard_exposes_cli_runs_even_without_project_selection():
