@@ -75,8 +75,7 @@ def _require_streamlit():
 
 
 def get_numeric_metric_columns(df):
-    percentage_columns = set(kir_percentage_columns(df))
-    return [column for column in df.select_dtypes(include="number").columns.tolist() if column not in percentage_columns]
+    return kir_metric_columns(df)
 
 
 def sort_metric_columns(columns):

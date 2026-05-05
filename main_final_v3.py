@@ -1,6 +1,7 @@
 import os
 import sys
 import traceback
+from argparse import ArgumentParser
 
 import yaml
 
@@ -35,20 +36,20 @@ def get_next_run_number(base_dir):
     return max(numbers) + 1
 
 
-def get_route_config(config, route_name):
+def get_route_config(config, route_name, kir_path=None, poteri_path=None):
     if route_name == "route_1":
         return {
             "name": "route_1",
-            "svod": os.path.join(config["inputs"]["route_1"], "kir_with_cats.xlsx"),
-            "poteri": os.path.join(config["inputs"]["route_1"], "poteri_with_cats.xlsx"),
+            "svod": kir_path or os.path.join(config["inputs"]["route_1"], "kir_with_cats.xlsx"),
+            "poteri": poteri_path or os.path.join(config["inputs"]["route_1"], "poteri_with_cats.xlsx"),
             "merge_key": ["НеделяГод", "ТС", "Категория", "Завод"],
             "desc": "route 1 with categories",
         }
     if route_name == "route_2":
         return {
             "name": "route_2",
-            "svod": os.path.join(config["inputs"]["route_2"], "kir_without_cats.xlsx"),
-            "poteri": os.path.join(config["inputs"]["route_2"], "poteri_without_cats.xlsx"),
+            "svod": kir_path or os.path.join(config["inputs"]["route_2"], "kir_without_cats.xlsx"),
+            "poteri": poteri_path or os.path.join(config["inputs"]["route_2"], "poteri_without_cats.xlsx"),
             "merge_key": ["НеделяГод", "ТС", "Завод"],
             "desc": "route 2 without categories",
         }
@@ -65,8 +66,22 @@ def _routes_for_mode(mode):
     raise ValueError(f"Unknown mode: {mode}")
 
 
-def run_route(config, route_name):
-    route_conf = get_route_config(config, route_name)
+def parse_cli_args(argv):
+    parser = ArgumentParser(description="Run KIR data pipeline.")
+    parser.add_argument("mode", nargs="?", default=None, choices=["route_1", "route_2", "both"])
+    parser.add_argument("--kir", help="Path to KIR source file. Only valid with route_1 or route_2.")
+    parser.add_argument("--poteri", help="Path to Poteri source file. Only valid with route_1 or route_2.")
+    parser.add_argument("--no-dashboard", action="store_true", help="Accepted for backwards compatibility.")
+    args = parser.parse_args(argv)
+    if (args.kir or args.poteri) and args.mode == "both":
+        raise ValueError("--kir/--poteri can only be used with route_1 or route_2")
+    if bool(args.kir) != bool(args.poteri):
+        raise ValueError("--kir and --poteri must be provided together")
+    return args
+
+
+def run_route(config, route_name, kir_path=None, poteri_path=None):
+    route_conf = get_route_config(config, route_name, kir_path=kir_path, poteri_path=poteri_path)
     run_num = get_next_run_number("data")
     run_dir = os.path.join("data", f"run_{run_num}_{route_name}")
 
@@ -111,8 +126,12 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     config = load_config()
 
-    args = [arg for arg in argv if arg != "--no-dashboard"]
-    mode = args[0].lower() if args else config.get("mode", "route_1")
+    try:
+        args = parse_cli_args(argv)
+    except ValueError as error:
+        print(f"ERROR: {error}")
+        return 1
+    mode = args.mode or config.get("mode", "route_1")
 
     try:
         routes = _routes_for_mode(mode)
@@ -123,7 +142,7 @@ def main(argv=None):
     failed = False
     for route_name in routes:
         try:
-            run_route(config, route_name)
+            run_route(config, route_name, kir_path=args.kir, poteri_path=args.poteri)
         except Exception as error:
             failed = True
             print(f"PROCESS ERROR ({route_name}): {error}")

@@ -70,20 +70,22 @@ WRITEOFFS = "\u0421\u043f\u0438\u0441\u0430\u043d\u0438\u044f"
 STOCK = "\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0439 \u0422\u0417"
 
 
-def test_metric_columns_prioritize_kir_columns():
+def test_metric_columns_only_include_business_kir_metrics():
     df = pd.DataFrame(
         {
             TS_COL: ["A"],
             KIR_950: [1.0],
             REVENUE: [100.0],
             KIR_066: [2.0],
+            "source_row_id": [1],
+            "НеделяГод": [202607],
+            "КИР-950 / Выручка, %": [1.0],
         }
     )
 
     metrics = sort_metric_columns(get_numeric_metric_columns(df))
 
-    assert metrics[:2] == [KIR_066, KIR_950]
-    assert REVENUE in metrics
+    assert metrics == [KIR_066, KIR_950]
 
 
 def test_factory_is_not_a_sidebar_filter():
