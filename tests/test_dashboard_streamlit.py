@@ -41,6 +41,8 @@ from dashboard_streamlit import (
     list_legacy_run_dirs,
     list_project_run_dirs,
     latest_project_run_name,
+    latest_project_run_by_route,
+    route_from_run_dir,
     load_upload_manifest,
     make_pipeline_run_request,
     metric_unit_for_metric,
@@ -702,6 +704,12 @@ def test_route_label_uses_business_names_for_ui():
     assert route_label("unknown") == "unknown"
 
 
+def test_route_from_run_dir_detects_route_suffix():
+    assert route_from_run_dir(Path("data/projects/950/runs/run_003_route_1")) == "route_1"
+    assert route_from_run_dir(Path("data/projects/950/runs/run_004_route_2")) == "route_2"
+    assert route_from_run_dir(Path("data/run_005")) is None
+
+
 def test_routes_for_ui_mode_rejects_unknown_mode():
     try:
         routes_for_ui_mode("bad")
@@ -885,6 +893,24 @@ def test_latest_project_run_name_returns_newest_run(tmp_path):
     (runs_dir / "run_002_route_2").mkdir()
 
     assert latest_project_run_name("003", projects_dir=tmp_path) == "run_002_route_2"
+
+
+def test_latest_project_run_by_route_returns_newest_ready_run_per_route(tmp_path):
+    runs_dir = tmp_path / "003" / "runs"
+    (runs_dir / "run_001_route_1").mkdir(parents=True)
+    (runs_dir / "run_002_route_2").mkdir()
+    (runs_dir / "run_003_route_1").mkdir()
+    (runs_dir / "run_004_route_3").mkdir()
+    (runs_dir / "run_001_route_1" / "final_clean_data.xlsx").write_text("ready")
+    (runs_dir / "run_002_route_2" / "final_clean_data.xlsx").write_text("ready")
+    (runs_dir / "run_004_route_3" / "final_clean_data.xlsx").write_text("ready")
+
+    runs = latest_project_run_by_route("003", projects_dir=tmp_path)
+
+    assert {route: path.name for route, path in runs.items()} == {
+        "route_1": "run_001_route_1",
+        "route_2": "run_002_route_2",
+    }
 
 
 def test_dashboard_run_label_uses_run_folder_name():

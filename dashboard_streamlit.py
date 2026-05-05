@@ -116,6 +116,53 @@ def latest_project_run_name(project_name, projects_dir=DATA_PROJECTS_DIR):
     return runs[0].name
 
 
+def latest_project_run_by_route(project_name, projects_dir=DATA_PROJECTS_DIR):
+    latest = {}
+    for run_dir in list_project_run_dirs(project_name, projects_dir=projects_dir):
+        if not (run_dir / "final_clean_data.xlsx").exists():
+            continue
+        for route_name in ("route_1", "route_2"):
+            if run_dir.name.endswith(f"_{route_name}") and route_name not in latest:
+                latest[route_name] = run_dir
+    return latest
+
+
+def route_from_run_dir(run_dir):
+    name = Path(run_dir).name
+    for route_name in ("route_1", "route_2"):
+        if name.endswith(f"_{route_name}"):
+            return route_name
+    return None
+
+
+def render_dashboard_header(selected_project=None, run_dir=None, run_by_route=None, disabled=False):
+    title_col, route_col = st.columns([1.25, 2.0])
+    title_col.title("KIR Dashboard")
+
+    current_route = route_from_run_dir(run_dir) if run_dir is not None else None
+    if selected_project and run_by_route:
+        options = [route for route in ("route_1", "route_2") if route in run_by_route]
+        if options:
+            index = options.index(current_route) if current_route in options else 0
+            selected_route = route_col.radio(
+                "Разрез анализа",
+                options,
+                index=index,
+                format_func=route_label,
+                horizontal=True,
+                disabled=disabled,
+                key=f"dashboard_header_route_toggle_{selected_project}_{Path(run_dir).name if run_dir else 'none'}",
+            )
+            route_col.caption(f"Открыт run: {dashboard_run_label(run_dir)}")
+            if selected_route != current_route:
+                st.session_state["opened_run_dir"] = str(run_by_route[selected_route])
+                st.rerun()
+            return
+
+    if current_route:
+        route_col.caption(f"Разрез анализа: {route_label(current_route)}")
+
+
 def load_upload_manifest(project_name, route_name, projects_dir=DATA_PROJECTS_DIR):
     manifest_path = Path(projects_dir) / str(project_name) / "uploads" / route_name / UPLOAD_MANIFEST_NAME
     if not manifest_path.exists():
@@ -1918,7 +1965,7 @@ def main():
     _require_streamlit()
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.markdown(dashboard_css(), unsafe_allow_html=True)
-    st.title("KIR Dashboard")
+    header_container = st.container()
 
     is_running = st.session_state.get("pipeline_running", False)
     current_projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
@@ -2163,14 +2210,27 @@ def main():
 
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:
+        with header_container:
+            st.title("KIR Dashboard")
         st.info(pipeline_status_text("open_dashboard_first"))
         return
     run_dir = Path(opened_run_dir)
     if selected_project and DATA_PROJECTS_DIR in run_dir.parents:
         expected_project_dir = DATA_PROJECTS_DIR / selected_project
         if expected_project_dir not in run_dir.parents:
+            with header_container:
+                st.title("KIR Dashboard")
             st.info(pipeline_status_text("open_current_project"))
             return
+
+    run_by_route = latest_project_run_by_route(selected_project) if selected_project and DATA_PROJECTS_DIR in run_dir.parents else {}
+    with header_container:
+        render_dashboard_header(
+            selected_project=selected_project,
+            run_dir=run_dir,
+            run_by_route=run_by_route,
+            disabled=st.session_state.get("pipeline_running", False),
+        )
 
     df = _load_run_dataframe(run_dir)
     if df is None:
