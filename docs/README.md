@@ -136,26 +136,28 @@ The dashboard opens `final_clean_data.xlsx`, lets the analyst select a KIR metri
 Current analysis flow:
 
 1. `Корреляции` - compare selected KIR metric with writeoffs, revenue, and free stock. Uses Pearson and Spearman, with business interpretation based mainly on Spearman because it is more stable for non-linear ranked relationships.
+   This screen also includes a collapsed summary table with total KIR, total writeoffs, revenue, free stock, and KIR/base percentages for the current filters.
 2. `КИР vs Метрики` - analyze KIR as a percentage of writeoffs, revenue, or free stock. Includes summary by totals and bin distribution for the selected percentage.
 3. `Распределение показателя` - analyze the selected KIR metric itself by fixed-width bins and percentiles.
-4. `Сравнение групп` - compare grouped statistics. Category grouping is split by TS when both networks are selected; factory grouping is intentionally not exposed because it can overload the dashboard.
-5. `Качество данных` - audit counts, route/run info, diagnostics, and output file download buttons.
-6. `Проблемные строки` - rows with missing matches, missing keys, duplicate keys, or quality warnings.
-7. `Данные` - filtered data preview.
+4. `Структура данных` - technical and audit views grouped under one screen:
+   - `Сравнение групп` - grouped statistics. Category grouping is split by TS when both networks are selected; factory grouping is intentionally not exposed because it can overload the dashboard.
+   - `Качество данных` - audit counts, route/run info, diagnostics, and output file download buttons.
+   - `Проблемные строки` - rows with missing matches, missing keys, duplicate keys, or quality warnings.
+   - `Таблица данных` - filtered data preview.
 
-The dashboard header shows the selected project and route. For project runs, the header route toggle can switch between the latest ready `route_1` and `route_2` runs when both exist.
+The dashboard header is compact and sticky. It shows the selected project, a business route toggle (`Магазины + категории` / `Магазины`), the current run folder, and the main analysis section selector.
+For project runs, the route toggle can switch between the latest ready `route_1` and `route_2` runs when both exist.
 
-## Bin Width Recommendation
+## Bin Tables
 
-The bin table can choose first bins either by explicit bin count or by target store share.
+Metric screens use fixed-width bins. Analysts set bin width directly and use percentile cards to understand thresholds and counts above or below those thresholds.
 
-When using target store share, `Apply bin width` applies a recommended bin width that aligns the bin grid with the requested share as closely as possible. Exact percentages are not always possible because:
+The bin table is a readable audit of the chart:
 
-- stores are counted as whole rows/stores;
-- many stores may have identical metric values;
-- fixed-width bins can only approximate a target share.
-
-The recommendation uses the same bin grid logic as the chart, including negative metric values.
+- row numbering starts at `1`;
+- `bin_start` and `bin_end` define the interval;
+- the duplicate text label column is hidden from the displayed table;
+- `count`, `store_count`, and `share` show concentration by interval.
 
 ## Pipeline Run Locking
 

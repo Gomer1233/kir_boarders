@@ -101,20 +101,24 @@ Dashboard filters on the `КИР vs Метрики` screen may exclude zero or n
 The dashboard should expose these sections:
 
 1. `Корреляции` - relationship analysis between selected KIR metric and poteri metrics. Spearman is the primary business strength indicator; Pearson is shown as an additional linearity check.
+   Also includes a collapsed totals summary for the selected KIR metric against writeoffs, revenue, and free stock under the current filters.
 2. `КИР vs Метрики` - percentage analysis of KIR relative to writeoffs, revenue, or free stock.
 3. `Распределение показателя` - distribution of the selected KIR metric by bins and percentiles.
-4. `Сравнение групп` - grouped comparison. Category grouping splits by TS when both networks are selected; factory grouping is not exposed.
-5. `Качество данных` - diagnostics and downloadable run files.
-6. `Проблемные строки` - quality-warning rows.
-7. `Данные` - filtered data preview.
+4. `Структура данных` - technical and audit views:
+   - `Сравнение групп` - grouped comparison. Category grouping splits by TS when both networks are selected; factory grouping is not exposed.
+   - `Качество данных` - diagnostics and downloadable run files.
+   - `Проблемные строки` - quality-warning rows.
+   - `Таблица данных` - filtered data preview.
 
 Dashboard controls should avoid rebuilding heavy charts on every minor filter edit; user-facing filters should use explicit apply actions where practical.
 
 ## Current UX Decisions
 
 - Header title is project-specific: `Дашборд <project_name>`.
-- Header includes a route toggle for the latest ready project runs by route.
-- The header is intended to stay visible while scrolling.
+- Header includes a compact business route toggle for the latest ready project runs by route: `Магазины + категории` / `Магазины`.
+- The sticky header includes the main analysis section selector so project, route, and section stay visible while scrolling.
+- Main navigation contains only business analysis screens plus `Структура данных`; technical views are grouped inside `Структура данных`.
+- Bin tables start row numbering at `1` and hide the duplicate text interval column from display.
 - Project UI disables upload/run controls while a pipeline run is active.
 - `Run Both routes` lets the user choose which route to open after the run finishes.
 - Existing CLI runs can be opened from the advanced `Open CLI run (data/run_*)` section when completed run folders exist.
