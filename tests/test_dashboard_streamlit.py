@@ -721,6 +721,7 @@ def test_dashboard_css_makes_header_sticky():
     css = dashboard_css()
 
     assert ".st-key-dashboard_header" in css
+    assert "div[data-testid=\"stVerticalBlock\"] > div:has(.st-key-dashboard_header)" in css
     assert "position: sticky" in css
     assert "top: 0" in css
 
@@ -1017,7 +1018,7 @@ from dashboard_streamlit import (
 def test_dashboard_screens_match_tz_sections():
     assert DASHBOARD_SCREENS == [
         "1. Корреляции",
-        "2. Проценты КИР",
+        "2. КИР vs Метрики",
         "3. Распределение показателя",
         "Сравнение групп",
         "Качество данных",

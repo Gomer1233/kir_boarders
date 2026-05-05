@@ -60,7 +60,7 @@ RELATIONSHIP_HEADING_COLORS = {
 }
 DASHBOARD_SCREENS = [
     "1. Корреляции",
-    "2. Проценты КИР",
+    "2. КИР vs Метрики",
     "3. Распределение показателя",
     "Сравнение групп",
     "Качество данных",
@@ -581,6 +581,7 @@ def dashboard_css():
 .block-container {
     padding-top: 2.1rem;
 }
+div[data-testid="stVerticalBlock"] > div:has(.st-key-dashboard_header),
 .st-key-dashboard_header {
     position: sticky;
     top: 0;
@@ -1726,7 +1727,7 @@ def _render_kir_percentage_filter_counters(counters):
 
 
 def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
-    st.subheader("Проценты КИР")
+    st.subheader("КИР vs Метрики")
     source = add_kir_percentage_columns(filtered)
     kir_columns = kir_metric_columns(source)
     base_columns = [column for column in PERCENT_BASE_COLUMNS if column in source.columns]
@@ -2301,7 +2302,7 @@ def main():
     screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
     if screen == "1. Корреляции":
         _render_relationships_tab(filtered, metric, numeric_metric)
-    elif screen == "2. Проценты КИР":
+    elif screen == "2. КИР vs Метрики":
         _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
     elif screen == "3. Распределение показателя":
         _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
