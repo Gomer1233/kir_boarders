@@ -1660,63 +1660,18 @@ def _render_metric_analysis_tab(
     st.subheader("Bin table")
     if not bin_table.empty:
         max_bins = len(bin_table)
-        sum_mode = st.radio(
-            "How to choose first bins",
-            ["By bin count", "By store share"],
-            horizontal=True,
-            key=f"{key_prefix}_first_bins_mode_{metric}",
+        st.caption(
+            "Для анализа порогов используйте плитки перцентилей выше. "
+            "Таблица бинов нужна для анализа формы распределения и концентрации магазинов по диапазонам."
         )
-        if sum_mode == "By store share":
-            target_share_percent = st.number_input(
-                "Target % of stores",
-                min_value=0.1,
-                max_value=100.0,
-                value=30.0,
-                step=0.1,
-                key=f"{key_prefix}_first_bins_target_share_{metric}",
-            )
-            n_bins = first_bin_count_for_target_share(bin_table, target_share_percent / 100)
-            previous_bins = first_bins_summary(numeric_metric, bin_table, n_bins - 1, store_series=store_series) if n_bins > 1 else None
-            recommended_width = recommended_bin_width_for_target_share(
-                numeric_metric,
-                target_share_percent / 100,
-                n_bins,
-                bin_width,
-                minimum=width_settings["minimum"],
-            )
-            current_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
-            st.caption(
-                f"Сейчас первые {n_bins} бинов дают {current_bins['store_sum']:,} магазинов "
-                f"({current_bins['store_share']:.1%}). Это минимальное количество первых бинов, "
-                f"которое достигает цели {target_share_percent:.1f}%."
-            )
-            if previous_bins:
-                st.caption(f"Предыдущие {n_bins - 1} бинов дают {previous_bins['store_share']:.1%}; поэтому они еще ниже цели.")
-            if recommended_width is not None:
-                rec_col, apply_col = st.columns([3, 1])
-                precision = 4 if is_percent_metric else 2
-                rec_col.info(
-                    f"Цель: {target_share_percent:.1f}% магазинов. "
-                    f"Рекомендуемый bin width: {_format_setting_number(recommended_width, precision=precision)}. "
-                    "Применяйте, только если хотите точнее подогнать ширину бина под цель. "
-                    "Точное совпадение не всегда возможно, если много магазинов имеют одинаковое значение."
-                )
-                apply_col.button(
-                    "Подогнать bin width под выбранный % магазинов",
-                    key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
-                    on_click=queue_session_value,
-                    args=(bin_width_key, recommended_width),
-                    help="Applies the recommended value to Bin width in chart settings.",
-                )
-        else:
-            n_bins = st.number_input(
-                "Sum first N bins",
-                min_value=1,
-                max_value=max_bins,
-                value=min(3, max_bins),
-                step=1,
-                key=f"{key_prefix}_first_bins_count_{metric}",
-            )
+        n_bins = st.number_input(
+            "Сумма первых N бинов",
+            min_value=1,
+            max_value=max_bins,
+            value=min(3, max_bins),
+            step=1,
+            key=f"{key_prefix}_first_bins_count_{metric}",
+        )
         first_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
         sum_col1, sum_col2 = st.columns(2)
         sum_col1.metric("First bins used", first_bins["bins_used"])

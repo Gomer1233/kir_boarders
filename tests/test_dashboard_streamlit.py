@@ -1127,15 +1127,16 @@ def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
     assert source.index("st.caption(chart_settings_summary(") > expander_index
 
 
-def test_bin_width_apply_button_uses_single_clear_business_action():
+def test_bin_table_keeps_only_manual_first_bin_summary():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
+    assert "By store share" not in source
+    assert "Target % of stores" not in source
     assert '"Apply bin width"' not in source
-    assert "Подогнать bin width под выбранный % магазинов" in source
-    assert "Цель: {target_share_percent:.1f}% магазинов." in source
+    assert "Подогнать bin width под выбранный % магазинов" not in source
     assert 'format=width_settings["format"]' in source
-    assert "Это минимальное количество первых бинов" in source
-    assert "Применяйте, только если хотите точнее подогнать ширину бина под цель." in source
+    assert "Для анализа порогов используйте плитки перцентилей выше." in source
+    assert "Сумма первых N бинов" in source
 
 
 def test_percent_bin_width_settings_allow_four_decimal_precision():
