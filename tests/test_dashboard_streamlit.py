@@ -48,6 +48,7 @@ from dashboard_streamlit import (
     load_upload_manifest,
     make_pipeline_run_request,
     metric_unit_for_metric,
+    prepare_bin_table_display,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -451,6 +452,26 @@ def test_prepare_bin_chart_table_preserves_chart_columns_for_empty_input():
 
     assert chart_table.empty
     assert {"bin_mid", "bar_width"}.issubset(chart_table.columns)
+
+
+def test_prepare_bin_table_display_hides_duplicate_bin_label_and_starts_rows_at_one():
+    table = pd.DataFrame(
+        {
+            "bin_start": [0, 10],
+            "bin_end": [10, 20],
+            "bin": ["0 - 10", "10 - 20"],
+            "count": [3, 2],
+            "store_count": [3, 2],
+            "share": [0.6, 0.4],
+        }
+    )
+
+    display = prepare_bin_table_display(table)
+
+    assert "bin" not in display.columns
+    assert display.index.tolist() == [1, 2]
+    assert display.index.name == "№"
+    assert display["bin_start"].tolist() == [0, 10]
 
 
 def test_build_bin_table_counts_rows_per_interval():

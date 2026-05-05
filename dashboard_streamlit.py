@@ -886,6 +886,15 @@ def prepare_bin_chart_table(bin_table):
     return chart_table
 
 
+def prepare_bin_table_display(bin_table):
+    display = bin_table.copy()
+    if "bin" in display.columns:
+        display = display.drop(columns=["bin"])
+    display.index = range(1, len(display) + 1)
+    display.index.name = "№"
+    return display
+
+
 def build_bin_table(series, bins=20):
     numeric = pd.to_numeric(series, errors="coerce").dropna()
     if numeric.empty:
@@ -1681,7 +1690,7 @@ def _render_metric_analysis_tab(
             f"{first_bins['store_share']:.1%} of stores",
             delta_color="off",
         )
-    st.dataframe(bin_table, use_container_width=True)
+    st.dataframe(prepare_bin_table_display(bin_table), use_container_width=True)
 
 
 def filter_kir_percentage_source(
