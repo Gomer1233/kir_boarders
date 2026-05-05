@@ -1077,6 +1077,7 @@ from dashboard_streamlit import (
     prepare_correlation_display_stats,
     split_by_network,
     resolve_kir_percent_settings,
+    filter_kir_percentage_source,
 )
 
 
@@ -1241,13 +1242,23 @@ def test_set_session_value_updates_target_key(monkeypatch):
 
 def test_resolve_kir_percent_settings_keeps_valid_applied_values():
     result = resolve_kir_percent_settings(
-        {"metric": "КИР-2", "base": "Выручка"},
+        {
+            "metric": "КИР-2",
+            "base": "Выручка",
+            "exclude_zero_kir": True,
+            "exclude_zero_base": False,
+        },
         ["КИР-1", "КИР-2"],
         ["Списания", "Выручка"],
         default_metric="КИР-1",
     )
 
-    assert result == {"metric": "КИР-2", "base": "Выручка"}
+    assert result == {
+        "metric": "КИР-2",
+        "base": "Выручка",
+        "exclude_zero_kir": True,
+        "exclude_zero_base": False,
+    }
 
 
 def test_resolve_kir_percent_settings_falls_back_when_applied_values_are_missing():
@@ -1258,7 +1269,84 @@ def test_resolve_kir_percent_settings_falls_back_when_applied_values_are_missing
         default_metric="КИР-2",
     )
 
-    assert result == {"metric": "КИР-2", "base": "Списания"}
+    assert result == {
+        "metric": "КИР-2",
+        "base": "Списания",
+        "exclude_zero_kir": False,
+        "exclude_zero_base": True,
+    }
+
+
+def test_filter_kir_percentage_source_excludes_zero_base_by_default():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": [0, 10, 20, 30],
+            "Выручка": [100, 0, 200, 0],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(source, "КИР-950 руб", "Выручка")
+
+    assert result["КИР-950 руб"].tolist() == [0, 20]
+    assert counters == {
+        "input_rows": 4,
+        "excluded_zero_kir_rows": 0,
+        "excluded_zero_base_rows": 2,
+        "excluded_rows": 2,
+        "remaining_rows": 2,
+    }
+
+
+def test_filter_kir_percentage_source_can_exclude_zero_kir_and_keep_zero_base():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": [0, 10, 0, 30],
+            "Выручка": [100, 0, 200, 300],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(
+        source,
+        "КИР-950 руб",
+        "Выручка",
+        exclude_zero_kir=True,
+        exclude_zero_base=False,
+    )
+
+    assert result["КИР-950 руб"].tolist() == [10, 30]
+    assert counters == {
+        "input_rows": 4,
+        "excluded_zero_kir_rows": 2,
+        "excluded_zero_base_rows": 0,
+        "excluded_rows": 2,
+        "remaining_rows": 2,
+    }
+
+
+def test_filter_kir_percentage_source_handles_numeric_text_values():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": ["0", "10", "20"],
+            "Выручка": ["100", "0", "200"],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(
+        source,
+        "КИР-950 руб",
+        "Выручка",
+        exclude_zero_kir=True,
+        exclude_zero_base=True,
+    )
+
+    assert result["КИР-950 руб"].tolist() == ["20"]
+    assert counters == {
+        "input_rows": 3,
+        "excluded_zero_kir_rows": 1,
+        "excluded_zero_base_rows": 1,
+        "excluded_rows": 2,
+        "remaining_rows": 1,
+    }
 
 
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():
