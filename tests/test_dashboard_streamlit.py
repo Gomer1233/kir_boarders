@@ -1102,6 +1102,8 @@ from dashboard_streamlit import (
     first_bins_summary,
     recommended_bin_width_for_target_share,
     set_session_value,
+    queue_session_value,
+    apply_pending_session_value,
     relationship_chart_rows,
     relationship_heading_html,
     percentile_store_counts,
@@ -1269,6 +1271,28 @@ def test_set_session_value_updates_target_key(monkeypatch):
     set_session_value("bin_width", 947.76)
 
     assert fake_state["bin_width"] == 947.76
+
+
+def test_apply_pending_session_value_updates_widget_key_before_render(monkeypatch):
+    import dashboard_streamlit
+
+    fake_state = {"bin_width": 100.0, "bin_width__pending": 947.76}
+    monkeypatch.setattr(dashboard_streamlit.st, "session_state", fake_state)
+
+    apply_pending_session_value("bin_width")
+
+    assert fake_state == {"bin_width": 947.76}
+
+
+def test_queue_session_value_stores_pending_widget_update(monkeypatch):
+    import dashboard_streamlit
+
+    fake_state = {"bin_width": 100.0}
+    monkeypatch.setattr(dashboard_streamlit.st, "session_state", fake_state)
+
+    queue_session_value("bin_width", 947.76)
+
+    assert fake_state == {"bin_width": 100.0, "bin_width__pending": 947.76}
 
 
 def test_resolve_kir_percent_settings_keeps_valid_applied_values():

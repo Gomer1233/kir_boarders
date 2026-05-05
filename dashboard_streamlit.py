@@ -970,6 +970,20 @@ def set_session_value(key, value):
     st.session_state[key] = value
 
 
+def _pending_session_key(key):
+    return f"{key}__pending"
+
+
+def queue_session_value(key, value):
+    st.session_state[_pending_session_key(key)] = value
+
+
+def apply_pending_session_value(key):
+    pending_key = _pending_session_key(key)
+    if pending_key in st.session_state:
+        st.session_state[key] = st.session_state.pop(pending_key)
+
+
 def first_bins_store_sum(bin_table, n_bins):
     if bin_table.empty:
         return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
@@ -1410,6 +1424,7 @@ def _render_metric_analysis_tab(
     tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
     width_settings = bin_width_settings(is_percent_metric=is_percent_metric)
 
+    apply_pending_session_value(bin_width_key)
     if bin_width_key not in st.session_state:
         st.session_state[bin_width_key] = default_bin_width(
             numeric_metric,
@@ -1587,7 +1602,7 @@ def _render_metric_analysis_tab(
                 apply_col.button(
                     "Apply bin width",
                     key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
-                    on_click=set_session_value,
+                    on_click=queue_session_value,
                     args=(bin_width_key, recommended_width),
                     help="Applies the recommended value to Bin width in chart settings.",
                 )
