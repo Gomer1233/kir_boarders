@@ -20,6 +20,7 @@ from dashboard_streamlit import (
     pipeline_progress_value,
     pipeline_status_text,
     dashboard_run_label,
+    dashboard_title,
     dashboard_css,
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
@@ -708,6 +709,20 @@ def test_route_from_run_dir_detects_route_suffix():
     assert route_from_run_dir(Path("data/projects/950/runs/run_003_route_1")) == "route_1"
     assert route_from_run_dir(Path("data/projects/950/runs/run_004_route_2")) == "route_2"
     assert route_from_run_dir(Path("data/run_005")) is None
+
+
+def test_dashboard_title_uses_selected_project_name():
+    assert dashboard_title("950") == "Дашборд 950"
+    assert dashboard_title("KIR_083") == "Дашборд KIR_083"
+    assert dashboard_title(None) == "KIR Dashboard"
+
+
+def test_dashboard_css_makes_header_sticky():
+    css = dashboard_css()
+
+    assert ".st-key-dashboard_header" in css
+    assert "position: sticky" in css
+    assert "top: 0" in css
 
 
 def test_routes_for_ui_mode_rejects_unknown_mode():

@@ -135,9 +135,13 @@ def route_from_run_dir(run_dir):
     return None
 
 
+def dashboard_title(selected_project=None):
+    return f"Дашборд {selected_project}" if selected_project else "KIR Dashboard"
+
+
 def render_dashboard_header(selected_project=None, run_dir=None, run_by_route=None, disabled=False):
     title_col, route_col = st.columns([1.25, 2.0])
-    title_col.title("KIR Dashboard")
+    title_col.title(dashboard_title(selected_project))
 
     current_route = route_from_run_dir(run_dir) if run_dir is not None else None
     if selected_project and run_by_route:
@@ -576,6 +580,19 @@ def dashboard_css():
 }
 .block-container {
     padding-top: 2.1rem;
+}
+.st-key-dashboard_header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding: 0.75rem 0 0.85rem 0;
+    margin: -0.75rem 0 1rem 0;
+    background:
+        linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.92) 72%, rgba(2, 6, 23, 0.00) 100%);
+    backdrop-filter: blur(14px);
+}
+.st-key-dashboard_header h1 {
+    margin-bottom: 0;
 }
 h1 {
     letter-spacing: -0.04em;
@@ -1965,7 +1982,7 @@ def main():
     _require_streamlit()
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.markdown(dashboard_css(), unsafe_allow_html=True)
-    header_container = st.container()
+    header_container = st.container(key="dashboard_header")
 
     is_running = st.session_state.get("pipeline_running", False)
     current_projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
@@ -2211,7 +2228,7 @@ def main():
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:
         with header_container:
-            st.title("KIR Dashboard")
+            st.title(dashboard_title(selected_project))
         st.info(pipeline_status_text("open_dashboard_first"))
         return
     run_dir = Path(opened_run_dir)
@@ -2219,7 +2236,7 @@ def main():
         expected_project_dir = DATA_PROJECTS_DIR / selected_project
         if expected_project_dir not in run_dir.parents:
             with header_container:
-                st.title("KIR Dashboard")
+                st.title(dashboard_title(selected_project))
             st.info(pipeline_status_text("open_current_project"))
             return
 
