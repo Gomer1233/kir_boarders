@@ -155,19 +155,19 @@ def render_dashboard_header(selected_project=None, run_dir=None, run_by_route=No
                 "Разрез анализа",
                 options,
                 index=index,
-                format_func=route_label,
+                format_func=route_short_label,
                 horizontal=True,
                 disabled=disabled,
                 key=f"dashboard_header_route_toggle_{selected_project}_{Path(run_dir).name if run_dir else 'none'}",
             )
-            route_col.caption(f"Открыт run: {dashboard_run_label(run_dir)}")
+            route_col.caption(f"{current_route or 'route'} · {dashboard_run_label(run_dir)}")
             if selected_route != current_route:
                 st.session_state["opened_run_dir"] = str(run_by_route[selected_route])
                 st.rerun()
             return
 
     if current_route:
-        route_col.caption(f"Разрез анализа: {route_label(current_route)}")
+        route_col.caption(f"Разрез: {route_short_label(current_route)} · {current_route}")
 
 
 def load_upload_manifest(project_name, route_name, projects_dir=DATA_PROJECTS_DIR):
@@ -264,6 +264,14 @@ def route_label(route_name):
         "route_1": "Route 1: Магазины и Категории",
         "route_2": "Route 2: Магазины",
         "both": "Both routes",
+    }
+    return labels.get(route_name, route_name)
+
+
+def route_short_label(route_name):
+    labels = {
+        "route_1": "Магазины + категории",
+        "route_2": "Магазины",
     }
     return labels.get(route_name, route_name)
 

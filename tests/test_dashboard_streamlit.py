@@ -40,6 +40,7 @@ from dashboard_streamlit import (
     filter_options_for_column,
     group_comparison_tables,
     route_label,
+    route_short_label,
     list_legacy_run_dirs,
     list_project_run_dirs,
     latest_project_run_name,
@@ -725,6 +726,12 @@ def test_route_label_uses_business_names_for_ui():
     assert route_label("route_2") == "Route 2: Магазины"
     assert route_label("both") == "Both routes"
     assert route_label("unknown") == "unknown"
+
+
+def test_route_short_label_uses_compact_business_names_for_header_toggle():
+    assert route_short_label("route_1") == "Магазины + категории"
+    assert route_short_label("route_2") == "Магазины"
+    assert route_short_label("unknown") == "unknown"
 
 
 def test_route_from_run_dir_detects_route_suffix():
