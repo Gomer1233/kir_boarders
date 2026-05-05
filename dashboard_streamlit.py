@@ -119,6 +119,8 @@ def latest_project_run_name(project_name, projects_dir=DATA_PROJECTS_DIR):
 def latest_project_run_by_route(project_name, projects_dir=DATA_PROJECTS_DIR):
     latest = {}
     for run_dir in list_project_run_dirs(project_name, projects_dir=projects_dir):
+        if not (run_dir / "final_clean_data.xlsx").exists():
+            continue
         for route_name in ("route_1", "route_2"):
             if run_dir.name.endswith(f"_{route_name}") and route_name not in latest:
                 latest[route_name] = run_dir

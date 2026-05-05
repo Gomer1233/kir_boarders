@@ -901,11 +901,14 @@ def test_latest_project_run_by_route_returns_newest_ready_run_per_route(tmp_path
     (runs_dir / "run_002_route_2").mkdir()
     (runs_dir / "run_003_route_1").mkdir()
     (runs_dir / "run_004_route_3").mkdir()
+    (runs_dir / "run_001_route_1" / "final_clean_data.xlsx").write_text("ready")
+    (runs_dir / "run_002_route_2" / "final_clean_data.xlsx").write_text("ready")
+    (runs_dir / "run_004_route_3" / "final_clean_data.xlsx").write_text("ready")
 
     runs = latest_project_run_by_route("003", projects_dir=tmp_path)
 
     assert {route: path.name for route, path in runs.items()} == {
-        "route_1": "run_003_route_1",
+        "route_1": "run_001_route_1",
         "route_2": "run_002_route_2",
     }
 
