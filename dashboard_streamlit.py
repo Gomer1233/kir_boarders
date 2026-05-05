@@ -727,7 +727,7 @@ def format_percentile_card(label, item, metric_unit="", metric_label="\u041a\u04
     is_percent_metric = metric_unit == "%"
     count_share = f"{float(share):.1%}"
     threshold_value = (
-        f"{float(item['threshold']):,.2f}".replace(".", ",") if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
+        f"{float(item['threshold']):,.4f}".replace(".", ",") if is_percent_metric and item["threshold"] is not None else _format_number(item["threshold"])
     )
     is_lower = "<=" in label
     count_details = "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443" if is_lower else "\u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u0432\u044b\u0448\u0435 \u0438\u043b\u0438 \u0440\u0430\u0432\u043d\u043e \u043f\u043e\u0440\u043e\u0433\u0443"
@@ -1014,17 +1014,18 @@ def bin_width_settings(is_percent_metric=False):
     }
 
 
-def _format_setting_number(value):
+def _format_setting_number(value, precision=2):
     number = float(value)
     if number.is_integer():
         return f"{int(number):,}"
-    return f"{number:,.2f}"
+    return f"{number:,.{int(precision)}f}"
 
 
-def chart_settings_summary(bin_width, custom_percentile, hide_zero_values=False, collapse_tail=False):
+def chart_settings_summary(bin_width, custom_percentile, hide_zero_values=False, collapse_tail=False, is_percent_metric=False):
     zero_text = "\u043d\u0443\u043b\u0438 \u0441\u043a\u0440\u044b\u0442\u044b" if hide_zero_values else "\u043d\u0443\u043b\u0438 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
     tail_text = "\u0445\u0432\u043e\u0441\u0442 \u0441\u0432\u0435\u0440\u043d\u0443\u0442" if collapse_tail else "\u0445\u0432\u043e\u0441\u0442 \u043f\u043e\u043a\u0430\u0437\u0430\u043d"
-    return f"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin {_format_setting_number(bin_width)}, P{int(custom_percentile)}, {zero_text}, {tail_text}"
+    precision = 4 if is_percent_metric else 2
+    return f"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin {_format_setting_number(bin_width, precision=precision)}, P{int(custom_percentile)}, {zero_text}, {tail_text}"
 
 
 def _adjust_session_bin_width(key, delta, minimum=1):
@@ -1573,7 +1574,7 @@ def _render_metric_analysis_tab(
     collapse_tail = bool(st.session_state.get(collapse_tail_key, False))
     st.markdown('<div class="metric-chart-settings-spacer" style="height:18px;"></div>', unsafe_allow_html=True)
     with st.expander("Настройки графика", expanded=False):
-        st.caption(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail))
+        st.caption(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail, is_percent_metric=is_percent_metric))
         st.checkbox(
             "Hide zero metric values",
             key=hide_zero_key,
@@ -1688,13 +1689,15 @@ def _render_metric_analysis_tab(
                 st.caption(f"Previous {n_bins - 1} bins cover {previous_bins['store_share']:.1%} of stores.")
             if recommended_width is not None:
                 rec_col, apply_col = st.columns([3, 1])
+                precision = 4 if is_percent_metric else 2
                 rec_col.info(
-                    f"Recommended bin width for this target: {_format_setting_number(recommended_width)}. "
-                    "It places the first-bin boundary near the selected store-share percentile; exact share can differ "
-                    "when many stores have the same metric value."
+                    f"Цель: {target_share_percent:.1f}% магазинов. "
+                    f"Рекомендуемый bin width: {_format_setting_number(recommended_width, precision=precision)}. "
+                    "После применения первые бины будут максимально близки к выбранной доле. "
+                    "Точное совпадение не всегда возможно, если много магазинов имеют одинаковое значение."
                 )
                 apply_col.button(
-                    "Apply bin width",
+                    "Подогнать bin width под выбранный % магазинов",
                     key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
                     on_click=queue_session_value,
                     args=(bin_width_key, recommended_width),

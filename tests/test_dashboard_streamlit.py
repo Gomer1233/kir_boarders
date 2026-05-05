@@ -311,9 +311,9 @@ def test_format_percentile_card_for_percent_metric_uses_business_percent_format(
     assert card["primary_value"] == "3 724"
     assert card["count_share"] == "15.0%"
     assert card["count_details"] == "магазинов выше или равно порогу"
-    assert card["threshold_value"] == "1,39"
+    assert card["threshold_value"] == "1,3894"
     assert card["threshold_unit"] == "%"
-    assert card["threshold_help"] == "Порог: 1,39 %. Ниже порога: 21 101 магазинов. Всего в выборке: 24 825."
+    assert card["threshold_help"] == "\u041f\u043e\u0440\u043e\u0433: 1,3894 %. \u041d\u0438\u0436\u0435 \u043f\u043e\u0440\u043e\u0433\u0430: 21 101 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: 24 825."
 
 
 def test_metric_unit_for_metric_detects_rubles_and_units():
@@ -1126,6 +1126,14 @@ def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
     assert source.index("st.caption(chart_settings_summary(") > expander_index
 
 
+def test_bin_width_apply_button_uses_single_clear_business_action():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+
+    assert '"Apply bin width"' not in source
+    assert "Подогнать bin width под выбранный % магазинов" in source
+    assert "Цель: {target_share_percent:.1f}% магазинов." in source
+
+
 def test_dashboard_exposes_cli_runs_even_without_project_selection():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
@@ -1185,6 +1193,9 @@ def test_chart_settings_summary_is_compact_and_business_readable():
         "Настройки графика: bin 250.50, P85, нули скрыты, хвост показан"
     )
 
+    assert chart_settings_summary(2.486732, 30, hide_zero_values=True, collapse_tail=False, is_percent_metric=True) == (
+        "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin 2.4867, P30, \u043d\u0443\u043b\u0438 \u0441\u043a\u0440\u044b\u0442\u044b, \u0445\u0432\u043e\u0441\u0442 \u043f\u043e\u043a\u0430\u0437\u0430\u043d"
+    )
 
 def test_percentile_store_counts_counts_low_p25_and_high_upper_thresholds():
     result = percentile_store_counts(pd.Series([0, 10, 20, 30]), custom_percentile=50)
