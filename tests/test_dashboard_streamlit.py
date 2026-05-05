@@ -1247,6 +1247,8 @@ def test_resolve_kir_percent_settings_keeps_valid_applied_values():
             "base": "Выручка",
             "exclude_zero_kir": True,
             "exclude_zero_base": False,
+            "exclude_negative_kir": True,
+            "exclude_negative_base": False,
         },
         ["КИР-1", "КИР-2"],
         ["Списания", "Выручка"],
@@ -1258,6 +1260,8 @@ def test_resolve_kir_percent_settings_keeps_valid_applied_values():
         "base": "Выручка",
         "exclude_zero_kir": True,
         "exclude_zero_base": False,
+        "exclude_negative_kir": True,
+        "exclude_negative_base": False,
     }
 
 
@@ -1274,6 +1278,8 @@ def test_resolve_kir_percent_settings_falls_back_when_applied_values_are_missing
         "base": "Списания",
         "exclude_zero_kir": False,
         "exclude_zero_base": True,
+        "exclude_negative_kir": False,
+        "exclude_negative_base": True,
     }
 
 
@@ -1292,6 +1298,8 @@ def test_filter_kir_percentage_source_excludes_zero_base_by_default():
         "input_rows": 4,
         "excluded_zero_kir_rows": 0,
         "excluded_zero_base_rows": 2,
+        "excluded_negative_kir_rows": 0,
+        "excluded_negative_base_rows": 0,
         "excluded_rows": 2,
         "remaining_rows": 2,
     }
@@ -1318,6 +1326,8 @@ def test_filter_kir_percentage_source_can_exclude_zero_kir_and_keep_zero_base():
         "input_rows": 4,
         "excluded_zero_kir_rows": 2,
         "excluded_zero_base_rows": 0,
+        "excluded_negative_kir_rows": 0,
+        "excluded_negative_base_rows": 0,
         "excluded_rows": 2,
         "remaining_rows": 2,
     }
@@ -1344,8 +1354,60 @@ def test_filter_kir_percentage_source_handles_numeric_text_values():
         "input_rows": 3,
         "excluded_zero_kir_rows": 1,
         "excluded_zero_base_rows": 1,
+        "excluded_negative_kir_rows": 0,
+        "excluded_negative_base_rows": 0,
         "excluded_rows": 2,
         "remaining_rows": 1,
+    }
+
+
+def test_filter_kir_percentage_source_excludes_negative_base_by_default_but_keeps_negative_kir():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": [-5, 10, 20, -30],
+            "Выручка": [100, -100, 200, 300],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(source, "КИР-950 руб", "Выручка")
+
+    assert result["КИР-950 руб"].tolist() == [-5, 20, -30]
+    assert counters == {
+        "input_rows": 4,
+        "excluded_zero_kir_rows": 0,
+        "excluded_zero_base_rows": 0,
+        "excluded_negative_kir_rows": 0,
+        "excluded_negative_base_rows": 1,
+        "excluded_rows": 1,
+        "remaining_rows": 3,
+    }
+
+
+def test_filter_kir_percentage_source_can_exclude_negative_kir():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": [-5, 10, 20, -30],
+            "Выручка": [100, -100, 200, 300],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(
+        source,
+        "КИР-950 руб",
+        "Выручка",
+        exclude_negative_kir=True,
+        exclude_negative_base=False,
+    )
+
+    assert result["КИР-950 руб"].tolist() == [10, 20]
+    assert counters == {
+        "input_rows": 4,
+        "excluded_zero_kir_rows": 0,
+        "excluded_zero_base_rows": 0,
+        "excluded_negative_kir_rows": 2,
+        "excluded_negative_base_rows": 0,
+        "excluded_rows": 2,
+        "remaining_rows": 2,
     }
 
 
