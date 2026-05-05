@@ -1608,6 +1608,55 @@ def _render_metric_analysis_tab(
     st.dataframe(bin_table, use_container_width=True)
 
 
+def filter_kir_percentage_source(
+    source,
+    kir_column,
+    base_column,
+    exclude_zero_kir=False,
+    exclude_zero_base=True,
+    exclude_negative_kir=False,
+    exclude_negative_base=True,
+):
+    kir_values = pd.to_numeric(source[kir_column], errors="coerce") if kir_column in source.columns else pd.Series(pd.NA, index=source.index)
+    base_values = pd.to_numeric(source[base_column], errors="coerce") if base_column in source.columns else pd.Series(pd.NA, index=source.index)
+    zero_kir_mask = kir_values.eq(0)
+    zero_base_mask = base_values.eq(0)
+    negative_kir_mask = kir_values.lt(0)
+    negative_base_mask = base_values.lt(0)
+    applied_zero_kir_mask = zero_kir_mask if exclude_zero_kir else pd.Series(False, index=source.index)
+    applied_zero_base_mask = zero_base_mask if exclude_zero_base else pd.Series(False, index=source.index)
+    applied_negative_kir_mask = negative_kir_mask if exclude_negative_kir else pd.Series(False, index=source.index)
+    applied_negative_base_mask = negative_base_mask if exclude_negative_base else pd.Series(False, index=source.index)
+
+    keep_mask = pd.Series(True, index=source.index)
+    keep_mask &= ~applied_zero_kir_mask
+    keep_mask &= ~applied_zero_base_mask
+    keep_mask &= ~applied_negative_kir_mask
+    keep_mask &= ~applied_negative_base_mask
+
+    excluded_mask = ~keep_mask
+    counters = {
+        "input_rows": int(len(source)),
+        "excluded_zero_kir_rows": int(applied_zero_kir_mask.sum()),
+        "excluded_zero_base_rows": int(applied_zero_base_mask.sum()),
+        "excluded_negative_kir_rows": int(applied_negative_kir_mask.sum()),
+        "excluded_negative_base_rows": int(applied_negative_base_mask.sum()),
+        "excluded_rows": int(excluded_mask.sum()),
+        "remaining_rows": int(keep_mask.sum()),
+    }
+    return source.loc[keep_mask].copy(), counters
+
+
+def _render_kir_percentage_filter_counters(counters):
+    counter_cols = st.columns(6)
+    counter_cols[0].metric("Исключено КИР = 0", f"{counters['excluded_zero_kir_rows']:,}".replace(",", " "))
+    counter_cols[1].metric("Исключено база = 0", f"{counters['excluded_zero_base_rows']:,}".replace(",", " "))
+    counter_cols[2].metric("Исключено КИР < 0", f"{counters['excluded_negative_kir_rows']:,}".replace(",", " "))
+    counter_cols[3].metric("Исключено база < 0", f"{counters['excluded_negative_base_rows']:,}".replace(",", " "))
+    counter_cols[4].metric("Исключено всего", f"{counters['excluded_rows']:,}".replace(",", " "))
+    counter_cols[5].metric("Осталось строк", f"{counters['remaining_rows']:,}".replace(",", " "))
+
+
 def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
     st.subheader("Проценты КИР")
     source = add_kir_percentage_columns(filtered)
@@ -1639,8 +1688,35 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
             horizontal=True,
             index=base_columns.index(applied_settings["base"]),
         )
+        draft_exclude_zero_kir = st.checkbox(
+            "Исключить строки с КИР = 0",
+            value=applied_settings["exclude_zero_kir"],
+            help="Влияет только на эту вкладку. Исходный final_clean_data не меняется.",
+        )
+        draft_exclude_zero_base = st.checkbox(
+            "Исключить строки с базой = 0",
+            value=applied_settings["exclude_zero_base"],
+            help="База - выбранные Списания, Выручка или Свободный ТЗ. По умолчанию включено, чтобы не анализировать деление на ноль.",
+        )
+        draft_exclude_negative_kir = st.checkbox(
+            "Исключить строки с КИР < 0",
+            value=applied_settings["exclude_negative_kir"],
+            help="По умолчанию выключено: отрицательный КИР может быть валидной корректировкой.",
+        )
+        draft_exclude_negative_base = st.checkbox(
+            "Исключить строки с базой < 0",
+            value=applied_settings["exclude_negative_base"],
+            help="По умолчанию включено: отрицательная база делает процент плохо интерпретируемым.",
+        )
         if st.form_submit_button("Apply percentage settings"):
-            applied_settings = {"metric": draft_kir, "base": draft_base}
+            applied_settings = {
+                "metric": draft_kir,
+                "base": draft_base,
+                "exclude_zero_kir": draft_exclude_zero_kir,
+                "exclude_zero_base": draft_exclude_zero_base,
+                "exclude_negative_kir": draft_exclude_negative_kir,
+                "exclude_negative_base": draft_exclude_negative_base,
+            }
             st.session_state["kir_percent_settings"] = applied_settings
 
     selected_kir = applied_settings["metric"]
@@ -1650,14 +1726,26 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
         st.info(f"Не удалось рассчитать колонку: {percent_metric}")
         return
 
+    analysis_source, counters = filter_kir_percentage_source(
+        source,
+        selected_kir,
+        selected_base,
+        exclude_zero_kir=applied_settings["exclude_zero_kir"],
+        exclude_zero_base=applied_settings["exclude_zero_base"],
+        exclude_negative_kir=applied_settings["exclude_negative_kir"],
+        exclude_negative_base=applied_settings["exclude_negative_base"],
+    )
+    _render_kir_percentage_filter_counters(counters)
+    st.caption("Сводная таблица и бины ниже рассчитаны по строкам после этих настроек вкладки.")
+
     st.caption(f"Формула: {selected_kir} / {selected_base} * 100. Значение 12.5 означает 12.5%.")
     st.subheader("Сводная таблица по суммам")
-    summary = kir_percentage_summary(source, selected_kir)
+    summary = kir_percentage_summary(analysis_source, selected_kir)
     st.dataframe(format_kir_summary_display(summary), use_container_width=True)
 
-    numeric_percent = pd.to_numeric(source[percent_metric], errors="coerce")
+    numeric_percent = pd.to_numeric(analysis_source[percent_metric], errors="coerce")
     _render_metric_analysis_tab(
-        source,
+        analysis_source,
         percent_metric,
         numeric_percent,
         filter_values=filter_values,
@@ -1798,11 +1886,22 @@ def format_kir_summary_display(summary):
 def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_metric):
     metric = (settings or {}).get("metric")
     base = (settings or {}).get("base")
+    exclude_zero_kir = bool((settings or {}).get("exclude_zero_kir", False))
+    exclude_zero_base = bool((settings or {}).get("exclude_zero_base", True))
+    exclude_negative_kir = bool((settings or {}).get("exclude_negative_kir", False))
+    exclude_negative_base = bool((settings or {}).get("exclude_negative_base", True))
     if metric not in kir_columns:
         metric = default_metric if default_metric in kir_columns else kir_columns[0]
     if base not in base_columns:
         base = base_columns[0]
-    return {"metric": metric, "base": base}
+    return {
+        "metric": metric,
+        "base": base,
+        "exclude_zero_kir": exclude_zero_kir,
+        "exclude_zero_base": exclude_zero_base,
+        "exclude_negative_kir": exclude_negative_kir,
+        "exclude_negative_base": exclude_negative_base,
+    }
 
 
 def main():
