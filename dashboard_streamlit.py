@@ -927,7 +927,7 @@ def build_bin_table_by_width(series, bin_width, store_series=None, max_bins=2000
     source = source.dropna(subset=["metric"])
     regular_source = source[source["metric"].lt(tail_start)].copy() if has_tail else source
     source_for_cut = regular_source if has_tail else source
-    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True)
+    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True, precision=10)
     counts = source_for_cut["bin_interval"].value_counts(sort=False)
 
     rows = []
@@ -1090,12 +1090,34 @@ def recommended_bin_width_for_target_share(metric_series, target_share, bins_use
     target_index = min(max(math.ceil(len(values) * target_share) - 1, 0), len(values) - 1)
     target_value = float(values.iloc[target_index])
     min_value = float(values.iloc[0])
-    start = 0.0 if min_value >= 0 else min_value
-    epsilon = max(float(minimum) / 1000, abs(target_value) * 1e-9)
-    width = target_value - start + epsilon
-    if width <= 0:
-        return float(minimum)
-    return round(max(float(minimum), width), 4)
+    minimum = float(minimum)
+    try:
+        width = max(minimum, float(current_bin_width))
+    except (TypeError, ValueError):
+        width = minimum
+
+    last_rounded = None
+    for _ in range(20):
+        table = build_bin_table_by_width(numeric, width)
+        next_bins = first_bin_count_for_target_share(table, target_share)
+        if next_bins <= 0:
+            return None
+
+        start = (min_value // width) * width
+        next_width = (target_value - start) / int(next_bins)
+        if next_width <= 0:
+            next_width = minimum
+        next_width = max(minimum, next_width)
+        # pd.cut uses right-open bins. Keep the recommended boundary slightly above
+        # the target value so equal metric values fall into the selected first bins.
+        safe_width = next_width + max(minimum / 100, abs(next_width) * 1e-6)
+        rounded = round(safe_width, 4)
+        if rounded == last_rounded:
+            return rounded
+        last_rounded = rounded
+        width = next_width
+
+    return last_rounded
 
 
 def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):

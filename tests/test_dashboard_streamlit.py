@@ -1296,12 +1296,12 @@ def test_first_bin_count_for_target_share_returns_minimum_bins_covering_share():
     assert first_bin_count_for_target_share(table, 0) == 1
 
 
-def test_recommended_bin_width_for_target_share_uses_target_percentile_boundary():
+def test_recommended_bin_width_for_target_share_uses_actual_bin_grid():
     metric = pd.Series(range(101))
 
     recommendation = recommended_bin_width_for_target_share(metric, target_share=0.40, bins_used=8, current_bin_width=10)
 
-    assert recommendation == 40.0
+    assert recommendation == 6.6668
 
 
 def test_recommended_bin_width_for_target_share_is_stable_after_apply():
@@ -1323,6 +1323,24 @@ def test_recommended_bin_width_for_target_share_is_stable_after_apply():
     )
 
     assert second_recommendation == first_recommendation
+
+
+def test_recommended_bin_width_for_target_share_uses_actual_negative_bin_start():
+    metric = pd.Series([-5, 20, 21, 22, 23])
+
+    recommendation = recommended_bin_width_for_target_share(
+        metric,
+        target_share=0.40,
+        bins_used=2,
+        current_bin_width=25,
+    )
+    applied_table = build_bin_table_by_width(metric, recommendation)
+    applied_bins = first_bin_count_for_target_share(applied_table, 0.40)
+    applied_summary = first_bins_summary(metric, applied_table, applied_bins)
+
+    assert recommendation != 25.0
+    assert applied_bins == 2
+    assert applied_summary["store_share"] == 0.40
 
 
 def test_set_session_value_updates_target_key(monkeypatch):
