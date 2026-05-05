@@ -25,6 +25,7 @@ from dashboard_streamlit import (
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
+    bin_width_settings,
     calculate_relationship_stats,
     chart_settings_summary,
     collapse_tail_bins,
@@ -39,6 +40,7 @@ from dashboard_streamlit import (
     filter_options_for_column,
     group_comparison_tables,
     route_label,
+    route_short_label,
     list_legacy_run_dirs,
     list_project_run_dirs,
     latest_project_run_name,
@@ -47,6 +49,7 @@ from dashboard_streamlit import (
     load_upload_manifest,
     make_pipeline_run_request,
     metric_unit_for_metric,
+    prepare_bin_table_display,
     prepare_bin_chart_table,
     metric_summary,
     metric_bar_value_column,
@@ -311,9 +314,9 @@ def test_format_percentile_card_for_percent_metric_uses_business_percent_format(
     assert card["primary_value"] == "3 724"
     assert card["count_share"] == "15.0%"
     assert card["count_details"] == "магазинов выше или равно порогу"
-    assert card["threshold_value"] == "1,39"
+    assert card["threshold_value"] == "1,3894"
     assert card["threshold_unit"] == "%"
-    assert card["threshold_help"] == "Порог: 1,39 %. Ниже порога: 21 101 магазинов. Всего в выборке: 24 825."
+    assert card["threshold_help"] == "\u041f\u043e\u0440\u043e\u0433: 1,3894 %. \u041d\u0438\u0436\u0435 \u043f\u043e\u0440\u043e\u0433\u0430: 21 101 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432. \u0412\u0441\u0435\u0433\u043e \u0432 \u0432\u044b\u0431\u043e\u0440\u043a\u0435: 24 825."
 
 
 def test_metric_unit_for_metric_detects_rubles_and_units():
@@ -450,6 +453,26 @@ def test_prepare_bin_chart_table_preserves_chart_columns_for_empty_input():
 
     assert chart_table.empty
     assert {"bin_mid", "bar_width"}.issubset(chart_table.columns)
+
+
+def test_prepare_bin_table_display_hides_duplicate_bin_label_and_starts_rows_at_one():
+    table = pd.DataFrame(
+        {
+            "bin_start": [0, 10],
+            "bin_end": [10, 20],
+            "bin": ["0 - 10", "10 - 20"],
+            "count": [3, 2],
+            "store_count": [3, 2],
+            "share": [0.6, 0.4],
+        }
+    )
+
+    display = prepare_bin_table_display(table)
+
+    assert "bin" not in display.columns
+    assert display.index.tolist() == [1, 2]
+    assert display.index.name == "№"
+    assert display["bin_start"].tolist() == [0, 10]
 
 
 def test_build_bin_table_counts_rows_per_interval():
@@ -703,6 +726,12 @@ def test_route_label_uses_business_names_for_ui():
     assert route_label("route_2") == "Route 2: Магазины"
     assert route_label("both") == "Both routes"
     assert route_label("unknown") == "unknown"
+
+
+def test_route_short_label_uses_compact_business_names_for_header_toggle():
+    assert route_short_label("route_1") == "Магазины + категории"
+    assert route_short_label("route_2") == "Магазины"
+    assert route_short_label("unknown") == "unknown"
 
 
 def test_route_from_run_dir_detects_route_suffix():
@@ -1005,6 +1034,7 @@ def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
 
 from dashboard_streamlit import (
     DASHBOARD_SCREENS,
+    DATA_STRUCTURE_SECTIONS,
     build_bin_table_by_width,
     default_bin_width,
     adjust_bin_width,
@@ -1020,10 +1050,16 @@ def test_dashboard_screens_match_tz_sections():
         "1. Корреляции",
         "2. КИР vs Метрики",
         "3. Распределение показателя",
+        "Структура данных",
+    ]
+
+
+def test_data_structure_sections_collect_technical_screens():
+    assert DATA_STRUCTURE_SECTIONS == [
         "Сравнение групп",
         "Качество данных",
         "Проблемные строки",
-        "Данные",
+        "Таблица данных",
     ]
 
 
@@ -1101,6 +1137,26 @@ def test_format_kir_summary_amount_handles_empty_values():
     assert format_kir_summary_amount(float("nan")) == ""
 
 
+def test_relationship_summary_table_reuses_kir_summary_for_current_metric():
+    source = pd.DataFrame(
+        {
+            "Категория": ["A", "A", "B"],
+            "КИР-950 руб": [10, 20, 40],
+            "Списания": [100, 200, 300],
+            "Выручка": [1000, 2000, 3000],
+            "Свободный ТЗ": [50, 100, 150],
+        }
+    )
+
+    display = relationship_summary_table(source, "КИР-950 руб")
+
+    assert display.loc[0, "Категория"] == "B"
+    assert display.loc[0, "Сумма КИР"] == "40"
+    assert display.loc[0, "КИР / Списания, %"] == "13.3%"
+    assert display.loc[0, "КИР / Выручка, %"] == "1.3%"
+    assert display.loc[0, "КИР / Свободный ТЗ, %"] == "26.7%"
+
+
 def test_metric_analysis_does_not_render_boxplot():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
@@ -1126,6 +1182,25 @@ def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
     assert source.index("st.caption(chart_settings_summary(") > expander_index
 
 
+def test_bin_table_keeps_only_manual_first_bin_summary():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+
+    assert "By store share" not in source
+    assert "Target % of stores" not in source
+    assert '"Apply bin width"' not in source
+    assert "Подогнать bin width под выбранный % магазинов" not in source
+    assert 'format=width_settings["format"]' in source
+    assert "Для анализа порогов используйте плитки перцентилей выше." in source
+    assert "Сумма первых N бинов" in source
+
+
+def test_percent_bin_width_settings_allow_four_decimal_precision():
+    settings = bin_width_settings(is_percent_metric=True)
+
+    assert settings["step"] == 0.0001
+    assert settings["format"] == "%.4f"
+
+
 def test_dashboard_exposes_cli_runs_even_without_project_selection():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
@@ -1144,6 +1219,7 @@ from dashboard_streamlit import (
     first_bins_summary,
     apply_pending_session_value,
     queue_session_value,
+    relationship_summary_table,
     recommended_bin_width_for_target_share,
     set_session_value,
     relationship_chart_rows,
@@ -1185,6 +1261,9 @@ def test_chart_settings_summary_is_compact_and_business_readable():
         "Настройки графика: bin 250.50, P85, нули скрыты, хвост показан"
     )
 
+    assert chart_settings_summary(2.486732, 30, hide_zero_values=True, collapse_tail=False, is_percent_metric=True) == (
+        "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0430: bin 2.4867, P30, \u043d\u0443\u043b\u0438 \u0441\u043a\u0440\u044b\u0442\u044b, \u0445\u0432\u043e\u0441\u0442 \u043f\u043e\u043a\u0430\u0437\u0430\u043d"
+    )
 
 def test_percentile_store_counts_counts_low_p25_and_high_upper_thresholds():
     result = percentile_store_counts(pd.Series([0, 10, 20, 30]), custom_percentile=50)
