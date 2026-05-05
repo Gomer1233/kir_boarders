@@ -1411,6 +1411,35 @@ def test_filter_kir_percentage_source_can_exclude_negative_kir():
     }
 
 
+def test_filter_kir_percentage_source_counters_ignore_disabled_rules_for_overlapping_conditions():
+    source = pd.DataFrame(
+        {
+            "КИР-950 руб": [-5, 10],
+            "Выручка": [0, 100],
+        }
+    )
+
+    result, counters = filter_kir_percentage_source(
+        source,
+        "КИР-950 руб",
+        "Выручка",
+        exclude_zero_base=False,
+        exclude_negative_kir=True,
+        exclude_negative_base=False,
+    )
+
+    assert result["КИР-950 руб"].tolist() == [10]
+    assert counters == {
+        "input_rows": 2,
+        "excluded_zero_kir_rows": 0,
+        "excluded_zero_base_rows": 0,
+        "excluded_negative_kir_rows": 1,
+        "excluded_negative_base_rows": 0,
+        "excluded_rows": 1,
+        "remaining_rows": 1,
+    }
+
+
 def test_first_bins_summary_counts_unique_stores_across_combined_first_bins():
     metric = pd.Series([1, 2, 12, 14, 25])
     stores = pd.Series(["A", "A", "B", "C", "D"])

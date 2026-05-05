@@ -1623,24 +1623,24 @@ def filter_kir_percentage_source(
     zero_base_mask = base_values.eq(0)
     negative_kir_mask = kir_values.lt(0)
     negative_base_mask = base_values.lt(0)
+    applied_zero_kir_mask = zero_kir_mask if exclude_zero_kir else pd.Series(False, index=source.index)
+    applied_zero_base_mask = zero_base_mask if exclude_zero_base else pd.Series(False, index=source.index)
+    applied_negative_kir_mask = negative_kir_mask if exclude_negative_kir else pd.Series(False, index=source.index)
+    applied_negative_base_mask = negative_base_mask if exclude_negative_base else pd.Series(False, index=source.index)
 
     keep_mask = pd.Series(True, index=source.index)
-    if exclude_zero_kir:
-        keep_mask &= ~zero_kir_mask
-    if exclude_zero_base:
-        keep_mask &= ~zero_base_mask
-    if exclude_negative_kir:
-        keep_mask &= ~negative_kir_mask
-    if exclude_negative_base:
-        keep_mask &= ~negative_base_mask
+    keep_mask &= ~applied_zero_kir_mask
+    keep_mask &= ~applied_zero_base_mask
+    keep_mask &= ~applied_negative_kir_mask
+    keep_mask &= ~applied_negative_base_mask
 
     excluded_mask = ~keep_mask
     counters = {
         "input_rows": int(len(source)),
-        "excluded_zero_kir_rows": int((zero_kir_mask & excluded_mask).sum()),
-        "excluded_zero_base_rows": int((zero_base_mask & excluded_mask).sum()),
-        "excluded_negative_kir_rows": int((negative_kir_mask & excluded_mask).sum()),
-        "excluded_negative_base_rows": int((negative_base_mask & excluded_mask).sum()),
+        "excluded_zero_kir_rows": int(applied_zero_kir_mask.sum()),
+        "excluded_zero_base_rows": int(applied_zero_base_mask.sum()),
+        "excluded_negative_kir_rows": int(applied_negative_kir_mask.sum()),
+        "excluded_negative_base_rows": int(applied_negative_base_mask.sum()),
         "excluded_rows": int(excluded_mask.sum()),
         "remaining_rows": int(keep_mask.sum()),
     }
