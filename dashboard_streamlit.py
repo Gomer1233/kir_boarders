@@ -60,7 +60,7 @@ RELATIONSHIP_HEADING_COLORS = {
 }
 DASHBOARD_SCREENS = [
     "1. Корреляции",
-    "2. Проценты КИР",
+    "2. КИР vs Метрики",
     "3. Распределение показателя",
     "Сравнение групп",
     "Качество данных",
@@ -135,9 +135,13 @@ def route_from_run_dir(run_dir):
     return None
 
 
+def dashboard_title(selected_project=None):
+    return f"Дашборд {selected_project}" if selected_project else "KIR Dashboard"
+
+
 def render_dashboard_header(selected_project=None, run_dir=None, run_by_route=None, disabled=False):
     title_col, route_col = st.columns([1.25, 2.0])
-    title_col.title("KIR Dashboard")
+    title_col.title(dashboard_title(selected_project))
 
     current_route = route_from_run_dir(run_dir) if run_dir is not None else None
     if selected_project and run_by_route:
@@ -577,6 +581,20 @@ def dashboard_css():
 .block-container {
     padding-top: 2.1rem;
 }
+div[data-testid="stVerticalBlock"] > div:has(.st-key-dashboard_header),
+.st-key-dashboard_header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding: 0.75rem 0 0.85rem 0;
+    margin: -0.75rem 0 1rem 0;
+    background:
+        linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.92) 72%, rgba(2, 6, 23, 0.00) 100%);
+    backdrop-filter: blur(14px);
+}
+.st-key-dashboard_header h1 {
+    margin-bottom: 0;
+}
 h1 {
     letter-spacing: -0.04em;
 }
@@ -909,7 +927,7 @@ def build_bin_table_by_width(series, bin_width, store_series=None, max_bins=2000
     source = source.dropna(subset=["metric"])
     regular_source = source[source["metric"].lt(tail_start)].copy() if has_tail else source
     source_for_cut = regular_source if has_tail else source
-    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True)
+    source_for_cut["bin_interval"] = pd.cut(source_for_cut["metric"], bins=edges, right=False, include_lowest=True, precision=10)
     counts = source_for_cut["bin_interval"].value_counts(sort=False)
 
     rows = []
@@ -1017,6 +1035,20 @@ def set_session_value(key, value):
     st.session_state[key] = value
 
 
+def _pending_session_key(key):
+    return f"{key}__pending"
+
+
+def queue_session_value(key, value):
+    st.session_state[_pending_session_key(key)] = value
+
+
+def apply_pending_session_value(key):
+    pending_key = _pending_session_key(key)
+    if pending_key in st.session_state:
+        st.session_state[key] = st.session_state.pop(pending_key)
+
+
 def first_bins_store_sum(bin_table, n_bins):
     if bin_table.empty:
         return {"bins_used": 0, "store_sum": 0, "row_sum": 0}
@@ -1050,17 +1082,42 @@ def first_bin_count_for_target_share(bin_table, target_share):
 
 def recommended_bin_width_for_target_share(metric_series, target_share, bins_used, current_bin_width, minimum=0.01):
     numeric = pd.to_numeric(metric_series, errors="coerce").dropna()
-    if numeric.empty or int(bins_used) <= 0:
+    if numeric.empty:
         return None
-    current_bin_width = float(current_bin_width)
-    if current_bin_width <= 0:
-        return None
-    start = (float(numeric.min()) // current_bin_width) * current_bin_width
-    target_value = float(numeric.quantile(min(max(float(target_share), 0.0), 1.0)))
-    width = (target_value - start) / int(bins_used)
-    if width <= 0:
-        return float(minimum)
-    return round(max(float(minimum), width), 4)
+
+    target_share = min(max(float(target_share), 0.0), 1.0)
+    values = numeric.sort_values().reset_index(drop=True)
+    target_index = min(max(math.ceil(len(values) * target_share) - 1, 0), len(values) - 1)
+    target_value = float(values.iloc[target_index])
+    min_value = float(values.iloc[0])
+    minimum = float(minimum)
+    try:
+        width = max(minimum, float(current_bin_width))
+    except (TypeError, ValueError):
+        width = minimum
+
+    last_rounded = None
+    for _ in range(20):
+        table = build_bin_table_by_width(numeric, width)
+        next_bins = first_bin_count_for_target_share(table, target_share)
+        if next_bins <= 0:
+            return None
+
+        start = (min_value // width) * width
+        next_width = (target_value - start) / int(next_bins)
+        if next_width <= 0:
+            next_width = minimum
+        next_width = max(minimum, next_width)
+        # pd.cut uses right-open bins. Keep the recommended boundary slightly above
+        # the target value so equal metric values fall into the selected first bins.
+        safe_width = next_width + max(minimum / 100, abs(next_width) * 1e-6)
+        rounded = round(safe_width, 4)
+        if rounded == last_rounded:
+            return rounded
+        last_rounded = rounded
+        width = next_width
+
+    return last_rounded
 
 
 def first_bins_summary(metric_series, bin_table, n_bins, store_series=None):
@@ -1457,6 +1514,7 @@ def _render_metric_analysis_tab(
     tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
     width_settings = bin_width_settings(is_percent_metric=is_percent_metric)
 
+    apply_pending_session_value(bin_width_key)
     if bin_width_key not in st.session_state:
         st.session_state[bin_width_key] = default_bin_width(
             numeric_metric,
@@ -1630,11 +1688,15 @@ def _render_metric_analysis_tab(
                 st.caption(f"Previous {n_bins - 1} bins cover {previous_bins['store_share']:.1%} of stores.")
             if recommended_width is not None:
                 rec_col, apply_col = st.columns([3, 1])
-                rec_col.info(f"Recommended bin width for this target: {_format_setting_number(recommended_width)}")
+                rec_col.info(
+                    f"Recommended bin width for this target: {_format_setting_number(recommended_width)}. "
+                    "It places the first-bin boundary near the selected store-share percentile; exact share can differ "
+                    "when many stores have the same metric value."
+                )
                 apply_col.button(
                     "Apply bin width",
                     key=f"{key_prefix}_apply_recommended_bin_width_{metric}",
-                    on_click=set_session_value,
+                    on_click=queue_session_value,
                     args=(bin_width_key, recommended_width),
                     help="Applies the recommended value to Bin width in chart settings.",
                 )
@@ -1709,7 +1771,7 @@ def _render_kir_percentage_filter_counters(counters):
 
 
 def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
-    st.subheader("Проценты КИР")
+    st.subheader("КИР vs Метрики")
     source = add_kir_percentage_columns(filtered)
     kir_columns = kir_metric_columns(source)
     base_columns = [column for column in PERCENT_BASE_COLUMNS if column in source.columns]
@@ -1965,7 +2027,7 @@ def main():
     _require_streamlit()
     st.set_page_config(page_title="KIR Dashboard", layout="wide")
     st.markdown(dashboard_css(), unsafe_allow_html=True)
-    header_container = st.container()
+    header_container = st.container(key="dashboard_header")
 
     is_running = st.session_state.get("pipeline_running", False)
     current_projects = project_select_options(list_projects(DATA_PROJECTS_DIR))
@@ -2211,7 +2273,7 @@ def main():
     opened_run_dir = st.session_state.get("opened_run_dir")
     if not opened_run_dir:
         with header_container:
-            st.title("KIR Dashboard")
+            st.title(dashboard_title(selected_project))
         st.info(pipeline_status_text("open_dashboard_first"))
         return
     run_dir = Path(opened_run_dir)
@@ -2219,7 +2281,7 @@ def main():
         expected_project_dir = DATA_PROJECTS_DIR / selected_project
         if expected_project_dir not in run_dir.parents:
             with header_container:
-                st.title("KIR Dashboard")
+                st.title(dashboard_title(selected_project))
             st.info(pipeline_status_text("open_current_project"))
             return
 
@@ -2284,7 +2346,7 @@ def main():
     screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
     if screen == "1. Корреляции":
         _render_relationships_tab(filtered, metric, numeric_metric)
-    elif screen == "2. Проценты КИР":
+    elif screen == "2. КИР vs Метрики":
         _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
     elif screen == "3. Распределение показателя":
         _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
