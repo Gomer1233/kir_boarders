@@ -39,7 +39,7 @@ def test_quality_flags_marks_source_total_rows_without_dropping_them():
             "has_missing_key": [False, True],
             "has_duplicate_kir_key": [False, False],
             "has_duplicate_poteri_key": [False, False],
-            "КИР-950, руб. без НДС": [100, 1000],
+            "КИР-950, руб. без НДС": [100, "1000"],
         }
     )
 

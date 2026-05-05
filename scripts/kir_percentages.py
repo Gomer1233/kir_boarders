@@ -21,7 +21,7 @@ def kir_metric_columns(df):
         name = str(column)
         if not name.startswith(KIR_PREFIX) or column in calculated_percent_columns:
             continue
-        if pd.api.types.is_numeric_dtype(df[column]):
+        if pd.to_numeric(df[column], errors="coerce").notna().any():
             columns.append(column)
     return columns
 

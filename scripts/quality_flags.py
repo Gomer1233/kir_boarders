@@ -29,12 +29,13 @@ def _has_source_total_marker(df):
 def _has_business_numeric_value(df):
     numeric_columns = [
         column
-        for column in df.select_dtypes(include=["number"]).columns
+        for column in df.columns
         if column != "source_row_id" and not str(column).startswith("has_")
     ]
     if not numeric_columns:
         return pd.Series(False, index=df.index)
-    return df[numeric_columns].notna().any(axis=1)
+    numeric = df[numeric_columns].apply(pd.to_numeric, errors="coerce")
+    return numeric.notna().any(axis=1)
 
 
 def _is_total_row(df):

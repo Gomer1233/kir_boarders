@@ -16,13 +16,14 @@ def test_kir_metric_columns_selects_numeric_kir_metrics_without_percent_columns(
         {
             "КИР-950 промо ниже 60%, руб": [10, 20],
             "КИР-950 шт": [1, 2],
+            "КИР-950 текстовые числа, руб": ["10", "20.5"],
             "КИР-950 промо ниже 60%, руб / Выручка, %": [10.0, 20.0],
             "Выручка": [100, 200],
             "КИР-текст": ["x", "y"],
         }
     )
 
-    assert kir_metric_columns(df) == ["КИР-950 промо ниже 60%, руб", "КИР-950 шт"]
+    assert kir_metric_columns(df) == ["КИР-950 промо ниже 60%, руб", "КИР-950 шт", "КИР-950 текстовые числа, руб"]
 
 
 def test_add_kir_percentage_columns_uses_business_percent_and_empty_for_bad_denominator():
@@ -45,6 +46,22 @@ def test_add_kir_percentage_columns_uses_business_percent_and_empty_for_bad_deno
     assert result.loc[0, percentage_column_name("КИР-950 шт", "Свободный ТЗ")] == 10.0
     assert math.isnan(result.loc[1, percentage_column_name("КИР-950 шт", "Свободный ТЗ")])
     assert list(df.columns) == ["КИР-950 руб", "КИР-950 шт", "Списания", "Выручка", "Свободный ТЗ"]
+
+
+def test_add_kir_percentage_columns_handles_kir_numbers_stored_as_text():
+    df = pd.DataFrame(
+        {
+            "КИР-950 руб": ["25", "30.5", "bad"],
+            "Выручка": [100, "200", 300],
+        }
+    )
+
+    result = add_kir_percentage_columns(df, base_columns=("Выручка",))
+
+    column = percentage_column_name("КИР-950 руб", "Выручка")
+    assert column in result.columns
+    assert result[column].tolist()[:2] == [25.0, 15.25]
+    assert math.isnan(result.loc[2, column])
 
 
 def test_kir_percentage_summary_groups_by_category_and_uses_ratio_of_sums():
