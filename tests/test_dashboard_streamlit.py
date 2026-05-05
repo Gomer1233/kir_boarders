@@ -1142,6 +1142,8 @@ from dashboard_streamlit import (
     first_bin_count_for_target_share,
     first_bins_store_sum,
     first_bins_summary,
+    apply_pending_session_value,
+    queue_session_value,
     recommended_bin_width_for_target_share,
     set_session_value,
     relationship_chart_rows,
@@ -1294,12 +1296,33 @@ def test_first_bin_count_for_target_share_returns_minimum_bins_covering_share():
     assert first_bin_count_for_target_share(table, 0) == 1
 
 
-def test_recommended_bin_width_for_target_share_aligns_target_boundary_to_used_bins():
+def test_recommended_bin_width_for_target_share_uses_target_percentile_boundary():
     metric = pd.Series(range(101))
 
     recommendation = recommended_bin_width_for_target_share(metric, target_share=0.40, bins_used=8, current_bin_width=10)
 
-    assert recommendation == 5.0
+    assert recommendation == 40.0
+
+
+def test_recommended_bin_width_for_target_share_is_stable_after_apply():
+    metric = pd.Series([0] * 100 + list(range(1, 1000)))
+
+    first_recommendation = recommended_bin_width_for_target_share(
+        metric,
+        target_share=0.50,
+        bins_used=46,
+        current_bin_width=10,
+    )
+    applied_table = build_bin_table_by_width(metric, first_recommendation)
+    applied_bins = first_bin_count_for_target_share(applied_table, 0.50)
+    second_recommendation = recommended_bin_width_for_target_share(
+        metric,
+        target_share=0.50,
+        bins_used=applied_bins,
+        current_bin_width=first_recommendation,
+    )
+
+    assert second_recommendation == first_recommendation
 
 
 def test_set_session_value_updates_target_key(monkeypatch):
@@ -1311,6 +1334,30 @@ def test_set_session_value_updates_target_key(monkeypatch):
     set_session_value("bin_width", 947.76)
 
     assert fake_state["bin_width"] == 947.76
+
+
+def test_queue_session_value_stores_pending_widget_update(monkeypatch):
+    import dashboard_streamlit
+
+    fake_state = {}
+    monkeypatch.setattr(dashboard_streamlit.st, "session_state", fake_state)
+
+    queue_session_value("bin_width", 947.76)
+
+    assert fake_state["bin_width__pending"] == 947.76
+    assert "bin_width" not in fake_state
+
+
+def test_apply_pending_session_value_updates_widget_key_before_render(monkeypatch):
+    import dashboard_streamlit
+
+    fake_state = {"bin_width": 1000.0, "bin_width__pending": 947.76}
+    monkeypatch.setattr(dashboard_streamlit.st, "session_state", fake_state)
+
+    apply_pending_session_value("bin_width")
+
+    assert fake_state["bin_width"] == 947.76
+    assert "bin_width__pending" not in fake_state
 
 
 def test_resolve_kir_percent_settings_keeps_valid_applied_values():
