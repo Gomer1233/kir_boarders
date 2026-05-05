@@ -62,10 +62,13 @@ DASHBOARD_SCREENS = [
     "1. Корреляции",
     "2. КИР vs Метрики",
     "3. Распределение показателя",
+    "Структура данных",
+]
+DATA_STRUCTURE_SECTIONS = [
     "Сравнение групп",
     "Качество данных",
     "Проблемные строки",
-    "Данные",
+    "Таблица данных",
 ]
 
 
@@ -579,21 +582,46 @@ def dashboard_css():
     gap: 0.85rem;
 }
 .block-container {
-    padding-top: 2.1rem;
+    padding-top: 1.1rem;
 }
 div[data-testid="stVerticalBlock"] > div:has(.st-key-dashboard_header),
 .st-key-dashboard_header {
     position: sticky;
     top: 0;
     z-index: 40;
-    padding: 0.75rem 0 0.85rem 0;
-    margin: -0.75rem 0 1rem 0;
+    padding: 0.35rem 0 0.55rem 0;
+    margin: -0.35rem 0 0.8rem 0;
     background:
-        linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.92) 72%, rgba(2, 6, 23, 0.00) 100%);
+        linear-gradient(180deg, rgba(2, 6, 23, 0.99) 0%, rgba(2, 6, 23, 0.94) 82%, rgba(2, 6, 23, 0.00) 100%);
+    border-bottom: 1px solid rgba(96, 165, 250, 0.14);
     backdrop-filter: blur(14px);
+}
+.st-key-dashboard_header [data-testid="stVerticalBlock"] {
+    gap: 0.35rem;
 }
 .st-key-dashboard_header h1 {
     margin-bottom: 0;
+    font-size: 2.05rem;
+    line-height: 1.02;
+}
+.st-key-dashboard_header [data-testid="stRadio"] {
+    margin: 0;
+}
+.st-key-dashboard_header [data-testid="stRadio"] > label {
+    margin-bottom: 0.25rem;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+}
+.st-key-dashboard_header [data-testid="stRadio"] div[role="radiogroup"] {
+    gap: 0.45rem;
+}
+.st-key-dashboard_header [data-testid="stRadio"] div[role="radiogroup"] label {
+    min-height: 32px;
+    padding: 0.38rem 0.82rem;
+}
+.st-key-dashboard_header [data-testid="stCaptionContainer"] p {
+    margin: 0;
+    font-size: 0.78rem;
 }
 h1 {
     letter-spacing: -0.04em;
@@ -1906,6 +1934,12 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
     if comparison_html:
         st.markdown(comparison_html, unsafe_allow_html=True)
 
+    summary = relationship_summary_table(filtered, metric)
+    if not summary.empty:
+        with st.expander("Сводная таблица по суммам", expanded=False):
+            st.caption("Суммы и проценты считаются по текущим фильтрам dashboard для выбранного КИР-показателя.")
+            st.dataframe(summary, use_container_width=True)
+
     network_by_name = {name: df for name, df in networks}
     for row in relationship_chart_rows(network_names, available):
         column = row["comparison"]
@@ -1945,6 +1979,20 @@ def _render_problem_rows_tab(filtered):
     st.dataframe(problems.head(1000), use_container_width=True)
 
 
+def _render_data_structure_tab(run_dir, filtered, problem_filtered, numeric_metric):
+    st.subheader("Структура данных")
+    section = st.radio("Раздел структуры данных", DATA_STRUCTURE_SECTIONS, horizontal=True)
+    if section == "Сравнение групп":
+        _render_group_comparison_tab(filtered, numeric_metric)
+    elif section == "Качество данных":
+        _render_audit_tab(run_dir, filtered, numeric_metric)
+    elif section == "Проблемные строки":
+        _render_problem_rows_tab(problem_filtered)
+    elif section == "Таблица данных":
+        st.subheader("Пример отфильтрованных данных")
+        st.dataframe(filtered.head(1000), use_container_width=True)
+
+
 def _format_number(value):
     if value is None or pd.isna(value):
         return "n/a"
@@ -1972,6 +2020,12 @@ def format_kir_summary_display(summary):
         if str(column).startswith("КИР / ") and str(column).endswith(", %"):
             display[column] = display[column].map(format_kir_summary_percent)
     return display
+
+
+def relationship_summary_table(filtered, metric):
+    if metric not in kir_metric_columns(filtered):
+        return pd.DataFrame()
+    return format_kir_summary_display(kir_percentage_summary(filtered, metric))
 
 
 def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_metric):
@@ -2258,6 +2312,8 @@ def main():
             return
 
     run_by_route = latest_project_run_by_route(selected_project) if selected_project and DATA_PROJECTS_DIR in run_dir.parents else {}
+    if st.session_state.get("dashboard_screen") not in DASHBOARD_SCREENS:
+        st.session_state["dashboard_screen"] = DASHBOARD_SCREENS[0]
     with header_container:
         render_dashboard_header(
             selected_project=selected_project,
@@ -2265,6 +2321,7 @@ def main():
             run_by_route=run_by_route,
             disabled=st.session_state.get("pipeline_running", False),
         )
+        screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True, key="dashboard_screen")
 
     df = _load_run_dataframe(run_dir)
     if df is None:
@@ -2315,22 +2372,14 @@ def main():
     problem_filtered = apply_filter_values(df, settings.get("filters", {}), exclude_total_rows=False)
     numeric_metric = pd.to_numeric(filtered[metric], errors="coerce")
 
-    screen = st.radio("Раздел анализа", DASHBOARD_SCREENS, horizontal=True)
     if screen == "1. Корреляции":
         _render_relationships_tab(filtered, metric, numeric_metric)
     elif screen == "2. КИР vs Метрики":
         _render_kir_percentages_tab(filtered, metric, settings.get("filters", {}))
     elif screen == "3. Распределение показателя":
         _render_metric_analysis_tab(filtered, metric, numeric_metric, settings.get("filters", {}))
-    elif screen == "Сравнение групп":
-        _render_group_comparison_tab(filtered, numeric_metric)
-    elif screen == "Качество данных":
-        _render_audit_tab(run_dir, filtered, numeric_metric)
-    elif screen == "Проблемные строки":
-        _render_problem_rows_tab(problem_filtered)
-    elif screen == "Данные":
-        st.subheader("Пример отфильтрованных данных")
-        st.dataframe(filtered.head(1000), use_container_width=True)
+    elif screen == "Структура данных":
+        _render_data_structure_tab(run_dir, filtered, problem_filtered, numeric_metric)
 
 
 if __name__ == "__main__":

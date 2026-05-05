@@ -1027,6 +1027,7 @@ def test_read_final_data_with_progress_reuses_session_cache(tmp_path):
 
 from dashboard_streamlit import (
     DASHBOARD_SCREENS,
+    DATA_STRUCTURE_SECTIONS,
     build_bin_table_by_width,
     default_bin_width,
     adjust_bin_width,
@@ -1042,10 +1043,16 @@ def test_dashboard_screens_match_tz_sections():
         "1. Корреляции",
         "2. КИР vs Метрики",
         "3. Распределение показателя",
+        "Структура данных",
+    ]
+
+
+def test_data_structure_sections_collect_technical_screens():
+    assert DATA_STRUCTURE_SECTIONS == [
         "Сравнение групп",
         "Качество данных",
         "Проблемные строки",
-        "Данные",
+        "Таблица данных",
     ]
 
 
@@ -1123,6 +1130,26 @@ def test_format_kir_summary_amount_handles_empty_values():
     assert format_kir_summary_amount(float("nan")) == ""
 
 
+def test_relationship_summary_table_reuses_kir_summary_for_current_metric():
+    source = pd.DataFrame(
+        {
+            "Категория": ["A", "A", "B"],
+            "КИР-950 руб": [10, 20, 40],
+            "Списания": [100, 200, 300],
+            "Выручка": [1000, 2000, 3000],
+            "Свободный ТЗ": [50, 100, 150],
+        }
+    )
+
+    display = relationship_summary_table(source, "КИР-950 руб")
+
+    assert display.loc[0, "Категория"] == "B"
+    assert display.loc[0, "Сумма КИР"] == "40"
+    assert display.loc[0, "КИР / Списания, %"] == "13.3%"
+    assert display.loc[0, "КИР / Выручка, %"] == "1.3%"
+    assert display.loc[0, "КИР / Свободный ТЗ, %"] == "26.7%"
+
+
 def test_metric_analysis_does_not_render_boxplot():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
@@ -1185,6 +1212,7 @@ from dashboard_streamlit import (
     first_bins_summary,
     apply_pending_session_value,
     queue_session_value,
+    relationship_summary_table,
     recommended_bin_width_for_target_share,
     set_session_value,
     relationship_chart_rows,
