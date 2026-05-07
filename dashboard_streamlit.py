@@ -1099,14 +1099,22 @@ def select_category_chart_data(
     }
 
 
-def bin_chart_title(metric):
-    return f"Распределение по бинам: {metric}"
-
-
-def bin_chart_scope_caption(chart_scope):
-    if chart_scope == ALL_CATEGORIES_LABEL:
-        return "График: все выбранные категории"
-    return f"Категория на графике: {chart_scope}"
+def bin_chart_status_summary(
+    chart_scope,
+    bin_width,
+    custom_percentile,
+    hide_zero_values=False,
+    collapse_tail=False,
+    is_percent_metric=False,
+):
+    scope = "все выбранные категории" if chart_scope == ALL_CATEGORIES_LABEL else str(chart_scope)
+    precision = 4 if is_percent_metric else 2
+    zero_text = "нули скрыты" if hide_zero_values else "нули показаны"
+    tail_text = "хвост свернут" if collapse_tail else "хвост показан"
+    return (
+        f"График: {scope} · bin {_format_setting_number(bin_width, precision=precision)} "
+        f"· P{int(custom_percentile)} · {zero_text} · {tail_text}"
+    )
 
 
 def _nice_width(raw_width):
@@ -1722,9 +1730,28 @@ def _render_metric_analysis_tab(
         container.markdown(render_percentile_card_html(card, color), unsafe_allow_html=True)
 
     collapse_tail = bool(st.session_state.get(collapse_tail_key, False))
+    max_bin_count = 500 if is_percent_metric else 2000
     st.markdown('<div class="metric-chart-settings-spacer" style="height:18px;"></div>', unsafe_allow_html=True)
-    with st.expander("Настройки графика", expanded=False):
-        st.caption(chart_settings_summary(st.session_state[bin_width_key], custom_percentile, hide_zero_values, collapse_tail, is_percent_metric=is_percent_metric))
+    with st.expander("Настройки распределения", expanded=False):
+        selected_chart_category = ALL_CATEGORIES_LABEL
+        bin_width = st.session_state[bin_width_key]
+        category_bin_tables = build_category_bin_tables(
+            filtered,
+            numeric_metric,
+            bin_width=bin_width,
+            store_series=store_series,
+            max_bins=max_bin_count,
+        )
+        chart_category_options = bin_chart_category_options(category_bin_tables)
+        if chart_category_options:
+            if st.session_state.get(chart_category_key) not in chart_category_options:
+                st.session_state[chart_category_key] = ALL_CATEGORIES_LABEL
+            selected_chart_category = st.selectbox(
+                "Категория на графике",
+                chart_category_options,
+                key=chart_category_key,
+                help="Список построен по категориям, оставшимся после текущих фильтров.",
+            )
         st.checkbox(
             "Hide zero metric values",
             key=hide_zero_key,
@@ -1747,63 +1774,54 @@ def _render_metric_analysis_tab(
                 key=f"{bin_width_key}_{label}",
                 on_click=_adjust_session_bin_width,
                 args=(bin_width_key, delta, width_settings["minimum"]),
-        )
+            )
         custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
 
-    max_bin_count = 500 if is_percent_metric else 2000
-    bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
-    category_bin_tables = build_category_bin_tables(
-        filtered,
-        numeric_metric,
-        bin_width=bin_width,
-        store_series=store_series,
-        max_bins=max_bin_count,
-    )
-    chart_category_options = bin_chart_category_options(category_bin_tables)
-    selected_chart_category = ALL_CATEGORIES_LABEL
-    if chart_category_options:
-        if st.session_state.get(chart_category_key) not in chart_category_options:
-            st.session_state[chart_category_key] = ALL_CATEGORIES_LABEL
-        selected_chart_category = st.selectbox(
-            "Категория на графике",
-            chart_category_options,
-            key=chart_category_key,
-            help="Список построен по категориям, оставшимся после текущих фильтров.",
+        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
+        category_bin_tables = build_category_bin_tables(
+            filtered,
+            numeric_metric,
+            bin_width=bin_width,
+            store_series=store_series,
+            max_bins=max_bin_count,
         )
-    chart_data = select_category_chart_data(
-        category_bin_tables,
-        selected_chart_category,
-        fallback_bin_table=bin_table,
-        fallback_metric_series=numeric_metric,
-        fallback_store_series=store_series,
-    )
-    chart_bin_table = chart_data["bin_table"]
+        chart_data = select_category_chart_data(
+            category_bin_tables,
+            selected_chart_category,
+            fallback_bin_table=bin_table,
+            fallback_metric_series=numeric_metric,
+            fallback_store_series=store_series,
+        )
+        chart_bin_table = chart_data["bin_table"]
+        if len(chart_bin_table) > 3:
+            collapse_tail = st.checkbox(
+                "Collapse long tail on bin chart",
+                key=collapse_tail_key,
+                help="Only affects the chart. The full bin table below stays unchanged.",
+            )
+            if collapse_tail:
+                max_tail_bins = len(chart_bin_table) - 1
+                if tail_bins_key not in st.session_state or int(st.session_state[tail_bins_key]) > max_tail_bins:
+                    st.session_state[tail_bins_key] = min(30, max_tail_bins)
+                head_bins = st.number_input(
+                    "Bins to keep before tail",
+                    min_value=1,
+                    max_value=max_tail_bins,
+                    step=1,
+                    key=tail_bins_key,
+                )
+                chart_bin_table = collapse_tail_bins(chart_bin_table, head_bins)
+        else:
+            collapse_tail = False
+
     chart_percentile_counts = percentile_store_counts(
         chart_data["metric_series"],
         custom_percentile=custom_percentile,
         store_series=chart_data["store_series"],
     )
-    if len(chart_bin_table) > 3:
-        collapse_tail = st.checkbox(
-            "Collapse long tail on bin chart",
-            key=collapse_tail_key,
-            help="Only affects the chart. The full bin table below stays unchanged.",
-        )
-        if collapse_tail:
-            max_tail_bins = len(chart_bin_table) - 1
-            if tail_bins_key not in st.session_state or int(st.session_state[tail_bins_key]) > max_tail_bins:
-                st.session_state[tail_bins_key] = min(30, max_tail_bins)
-            head_bins = st.number_input(
-                "Bins to keep before tail",
-                min_value=1,
-                max_value=max_tail_bins,
-                step=1,
-                key=tail_bins_key,
-            )
-            chart_bin_table = collapse_tail_bins(chart_bin_table, head_bins)
-            st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(chart_data['bin_table']):,} bins.")
-    else:
-        collapse_tail = False
+    st.markdown(
+        f"**{bin_chart_status_summary(chart_data['label'], bin_width, custom_percentile, hide_zero_values, collapse_tail, is_percent_metric=is_percent_metric)}**"
+    )
 
     try:
         import plotly.express as px
@@ -1813,15 +1831,13 @@ def _render_metric_analysis_tab(
         else:
             bar_value_column = metric_bar_value_column(chart_bin_table)
             chart_bin_table = prepare_bin_chart_table(chart_bin_table)
-            chart_scope = chart_data["label"]
-            st.markdown(f"**{bin_chart_scope_caption(chart_scope)}**")
             fig = px.bar(
                 chart_bin_table,
                 x="bin_mid",
                 y=bar_value_column,
                 text=bar_value_column,
                 hover_data=["bin", "bin_start", "bin_end", "share"],
-                title=bin_chart_title(metric),
+                title="Распределение по бинам",
             )
             fig.update_traces(
                 width=chart_bin_table["bar_width"],

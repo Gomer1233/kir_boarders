@@ -29,8 +29,7 @@ from dashboard_streamlit import (
     build_category_bin_tables,
     build_category_first_bins_summaries,
     bin_chart_category_options,
-    bin_chart_scope_caption,
-    bin_chart_title,
+    bin_chart_status_summary,
     bin_width_settings,
     calculate_relationship_stats,
     chart_settings_summary,
@@ -585,6 +584,24 @@ def test_bin_chart_category_options_use_filtered_category_tables():
     assert bin_chart_category_options(tables) == ["Все категории", "A", "B"]
 
 
+def test_bin_chart_category_options_hide_selector_for_single_category():
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A"],
+            FACTORY_COL: ["S1", "S2"],
+        }
+    )
+    metric = pd.Series([10, 20], index=df.index)
+    tables = build_category_bin_tables(
+        df,
+        metric,
+        bin_width=10,
+        store_series=df[FACTORY_COL],
+    )
+
+    assert bin_chart_category_options(tables) == []
+
+
 def test_select_category_chart_data_returns_selected_category_scope():
     df = pd.DataFrame(
         {
@@ -615,15 +632,34 @@ def test_select_category_chart_data_returns_selected_category_scope():
     assert selected["bin_table"]["count"].tolist() == [2]
 
 
-def test_bin_chart_title_is_readable_and_keeps_metric_name():
-    title = bin_chart_title("КИР-950")
+def test_bin_chart_status_summary_starts_with_scope_and_settings():
+    assert bin_chart_status_summary(
+        "Бакалея",
+        1000,
+        50,
+        hide_zero_values=False,
+        collapse_tail=True,
+    ) == "График: Бакалея · bin 1,000 · P50 · нули показаны · хвост свернут"
+    assert bin_chart_status_summary(
+        "Все категории",
+        2.486732,
+        30,
+        hide_zero_values=True,
+        collapse_tail=False,
+        is_percent_metric=True,
+    ) == "График: все выбранные категории · bin 2.4867 · P30 · нули скрыты · хвост показан"
 
-    assert title == "Распределение по бинам: КИР-950"
 
+def test_metric_chart_controls_are_grouped_in_one_distribution_expander():
+    source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
+    expander_index = source.index('with st.expander("Настройки распределения", expanded=False):')
+    chart_index = source.index("st.plotly_chart(fig, use_container_width=True)")
 
-def test_bin_chart_scope_caption_highlights_selected_category():
-    assert bin_chart_scope_caption("Бакалея") == "Категория на графике: Бакалея"
-    assert bin_chart_scope_caption("Все категории") == "График: все выбранные категории"
+    assert '"Категория на графике"' in source
+    assert '"Collapse long tail on bin chart"' in source
+    assert expander_index < source.index('"Категория на графике"') < chart_index
+    assert expander_index < source.index('"Collapse long tail on bin chart"') < chart_index
+    assert 'with st.expander("Настройки графика", expanded=False):' not in source
 
 
 def test_group_comparison_tables_split_categories_by_ts_when_multiple_networks_selected():
@@ -1353,17 +1389,20 @@ def test_metric_analysis_hides_detailed_summary_table_and_moves_chart_settings_b
     stats_table_index = source.index("st.dataframe(pd.DataFrame([summary]), use_container_width=True)")
 
     assert source.rfind("with st.expander(", 0, stats_table_index) > source.index('c5.metric("Zero values"')
-    assert source.index("render_percentile_card_html") < source.index('with st.expander("Настройки графика", expanded=False):')
+    assert source.index("render_percentile_card_html") < source.index('with st.expander("Настройки распределения", expanded=False):')
     assert source.index('"Hide zero metric values"') > source.index("render_percentile_card_html")
 
 
 def test_metric_chart_settings_expander_has_stable_title_and_visible_summary():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
-    expander_index = source.index('with st.expander("Настройки графика", expanded=False):')
+    expander_index = source.index('with st.expander("Настройки распределения", expanded=False):')
+    chart_index = source.index("st.plotly_chart(fig, use_container_width=True)")
 
     assert "with st.expander(chart_settings_summary(" not in source
     assert source.index("metric-chart-settings-spacer") < expander_index
-    assert source.index("st.caption(chart_settings_summary(") > expander_index
+    summary_call_index = source.index("bin_chart_status_summary(", expander_index)
+    assert summary_call_index > expander_index
+    assert summary_call_index < chart_index
 
 
 def test_bin_table_keeps_only_manual_first_bin_summary():
