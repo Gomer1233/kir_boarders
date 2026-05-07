@@ -70,6 +70,7 @@ DATA_STRUCTURE_SECTIONS = [
     "Проблемные строки",
     "Таблица данных",
 ]
+ALL_CATEGORIES_LABEL = "Все категории"
 
 
 def _require_streamlit():
@@ -1068,6 +1069,46 @@ def build_category_first_bins_summaries(category_bin_tables, n_bins):
     return summaries
 
 
+def bin_chart_category_options(category_bin_tables):
+    if len(category_bin_tables) <= 1:
+        return []
+    return [ALL_CATEGORIES_LABEL] + [item["category"] for item in category_bin_tables]
+
+
+def select_category_chart_data(
+    category_bin_tables,
+    selected_category,
+    fallback_bin_table,
+    fallback_metric_series,
+    fallback_store_series=None,
+):
+    if selected_category and selected_category != ALL_CATEGORIES_LABEL:
+        for item in category_bin_tables:
+            if item["category"] == selected_category:
+                return {
+                    "label": item["category"],
+                    "bin_table": item["bin_table"],
+                    "metric_series": item["metric_series"],
+                    "store_series": item["store_series"],
+                }
+    return {
+        "label": ALL_CATEGORIES_LABEL,
+        "bin_table": fallback_bin_table,
+        "metric_series": fallback_metric_series,
+        "store_series": fallback_store_series,
+    }
+
+
+def bin_chart_title(metric):
+    return f"Распределение по бинам: {metric}"
+
+
+def bin_chart_scope_caption(chart_scope):
+    if chart_scope == ALL_CATEGORIES_LABEL:
+        return "График: все выбранные категории"
+    return f"Категория на графике: {chart_scope}"
+
+
 def _nice_width(raw_width):
     if raw_width <= 0:
         return 1.0
@@ -1621,6 +1662,7 @@ def _render_metric_analysis_tab(
     custom_percentile_key = f"{key_prefix}_custom_percentile_{metric}"
     collapse_tail_key = f"{key_prefix}_collapse_tail_bins_{metric}"
     tail_bins_key = f"{key_prefix}_tail_bins_to_keep_{metric}"
+    chart_category_key = f"{key_prefix}_bin_chart_category_{metric}"
     width_settings = bin_width_settings(is_percent_metric=is_percent_metric)
 
     apply_pending_session_value(bin_width_key)
@@ -1705,49 +1747,81 @@ def _render_metric_analysis_tab(
                 key=f"{bin_width_key}_{label}",
                 on_click=_adjust_session_bin_width,
                 args=(bin_width_key, delta, width_settings["minimum"]),
-            )
+        )
         custom_percentile = st.slider("Custom percentile", min_value=1, max_value=99, key=custom_percentile_key)
 
-        max_bin_count = 500 if is_percent_metric else 2000
-        bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
-        chart_bin_table = bin_table
-        if len(bin_table) > 3:
-            collapse_tail = st.checkbox(
-                "Collapse long tail on bin chart",
-                key=collapse_tail_key,
-                help="Only affects the chart. The full bin table below stays unchanged.",
+    max_bin_count = 500 if is_percent_metric else 2000
+    bin_table = build_bin_table_by_width(numeric_metric, bin_width=bin_width, store_series=store_series, max_bins=max_bin_count)
+    category_bin_tables = build_category_bin_tables(
+        filtered,
+        numeric_metric,
+        bin_width=bin_width,
+        store_series=store_series,
+        max_bins=max_bin_count,
+    )
+    chart_category_options = bin_chart_category_options(category_bin_tables)
+    selected_chart_category = ALL_CATEGORIES_LABEL
+    if chart_category_options:
+        if st.session_state.get(chart_category_key) not in chart_category_options:
+            st.session_state[chart_category_key] = ALL_CATEGORIES_LABEL
+        selected_chart_category = st.selectbox(
+            "Категория на графике",
+            chart_category_options,
+            key=chart_category_key,
+            help="Список построен по категориям, оставшимся после текущих фильтров.",
+        )
+    chart_data = select_category_chart_data(
+        category_bin_tables,
+        selected_chart_category,
+        fallback_bin_table=bin_table,
+        fallback_metric_series=numeric_metric,
+        fallback_store_series=store_series,
+    )
+    chart_bin_table = chart_data["bin_table"]
+    chart_percentile_counts = percentile_store_counts(
+        chart_data["metric_series"],
+        custom_percentile=custom_percentile,
+        store_series=chart_data["store_series"],
+    )
+    if len(chart_bin_table) > 3:
+        collapse_tail = st.checkbox(
+            "Collapse long tail on bin chart",
+            key=collapse_tail_key,
+            help="Only affects the chart. The full bin table below stays unchanged.",
+        )
+        if collapse_tail:
+            max_tail_bins = len(chart_bin_table) - 1
+            if tail_bins_key not in st.session_state or int(st.session_state[tail_bins_key]) > max_tail_bins:
+                st.session_state[tail_bins_key] = min(30, max_tail_bins)
+            head_bins = st.number_input(
+                "Bins to keep before tail",
+                min_value=1,
+                max_value=max_tail_bins,
+                step=1,
+                key=tail_bins_key,
             )
-            if collapse_tail:
-                max_tail_bins = len(bin_table) - 1
-                if tail_bins_key not in st.session_state or int(st.session_state[tail_bins_key]) > max_tail_bins:
-                    st.session_state[tail_bins_key] = min(30, max_tail_bins)
-                head_bins = st.number_input(
-                    "Bins to keep before tail",
-                    min_value=1,
-                    max_value=max_tail_bins,
-                    step=1,
-                    key=tail_bins_key,
-                )
-                chart_bin_table = collapse_tail_bins(bin_table, head_bins)
-                st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(bin_table):,} bins.")
-        else:
-            collapse_tail = False
+            chart_bin_table = collapse_tail_bins(chart_bin_table, head_bins)
+            st.caption(f"Chart tail is collapsed into one bar. Full bin table still has {len(chart_data['bin_table']):,} bins.")
+    else:
+        collapse_tail = False
 
     try:
         import plotly.express as px
 
-        if bin_table.empty:
+        if chart_bin_table.empty:
             st.info("No valid numeric metric values after filters. Bin chart is unavailable.")
         else:
-            bar_value_column = metric_bar_value_column(bin_table)
+            bar_value_column = metric_bar_value_column(chart_bin_table)
             chart_bin_table = prepare_bin_chart_table(chart_bin_table)
+            chart_scope = chart_data["label"]
+            st.markdown(f"**{bin_chart_scope_caption(chart_scope)}**")
             fig = px.bar(
                 chart_bin_table,
                 x="bin_mid",
                 y=bar_value_column,
                 text=bar_value_column,
                 hover_data=["bin", "bin_start", "bin_end", "share"],
-                title=f"Fixed-width bin distribution: {metric}",
+                title=bin_chart_title(metric),
             )
             fig.update_traces(
                 width=chart_bin_table["bar_width"],
@@ -1756,22 +1830,15 @@ def _render_metric_analysis_tab(
                 cliponaxis=False,
             )
             fig.update_xaxes(title_text="metric value")
-            fig.add_vline(x=percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
-            fig.add_vline(x=percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
-            fig.add_vline(x=percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
+            fig.add_vline(x=chart_percentile_counts["p25"]["threshold"], line_color="green", line_width=3)
+            fig.add_vline(x=chart_percentile_counts["p85"]["threshold"], line_color="red", line_width=3)
+            fig.add_vline(x=chart_percentile_counts["custom"]["threshold"], line_color="orange", line_width=3, line_dash="dash")
             st.plotly_chart(fig, use_container_width=True)
     except ModuleNotFoundError:
         st.warning("Plotly is not installed; showing a basic Streamlit chart.")
-        st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)
+        st.bar_chart(chart_bin_table.set_index("bin")["count"] if not chart_bin_table.empty else chart_bin_table)
     st.subheader("Bin table")
     if not bin_table.empty:
-        category_bin_tables = build_category_bin_tables(
-            filtered,
-            numeric_metric,
-            bin_width=bin_width,
-            store_series=store_series,
-            max_bins=max_bin_count,
-        )
         show_category_tables = len(category_bin_tables) > 1
         max_bins = (
             max(len(item["bin_table"]) for item in category_bin_tables)

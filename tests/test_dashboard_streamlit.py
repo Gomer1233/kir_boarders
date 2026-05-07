@@ -25,8 +25,12 @@ from dashboard_streamlit import (
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
+    build_bin_table_by_width,
     build_category_bin_tables,
     build_category_first_bins_summaries,
+    bin_chart_category_options,
+    bin_chart_scope_caption,
+    bin_chart_title,
     bin_width_settings,
     calculate_relationship_stats,
     chart_settings_summary,
@@ -61,6 +65,7 @@ from dashboard_streamlit import (
     project_route_uploads_exist,
     project_run_lock_status,
     routes_for_ui_mode,
+    select_category_chart_data,
     select_run_result_to_open,
     should_render_upload_widgets,
     sort_metric_columns,
@@ -559,6 +564,66 @@ def test_build_category_first_bins_summaries_uses_shared_n_for_each_category():
     assert summaries[1]["store_sum"] == 2
     assert summaries[1]["total_stores"] == 3
     assert round(summaries[1]["store_share"], 4) == 0.6667
+
+
+def test_bin_chart_category_options_use_filtered_category_tables():
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "B", "C"],
+            FACTORY_COL: ["S1", "S2", "S3"],
+        }
+    )
+    filtered = df[df["\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"].isin(["A", "B"])]
+    metric = pd.Series([10, 20], index=filtered.index)
+    tables = build_category_bin_tables(
+        filtered,
+        metric,
+        bin_width=10,
+        store_series=filtered[FACTORY_COL],
+    )
+
+    assert bin_chart_category_options(tables) == ["Все категории", "A", "B"]
+
+
+def test_select_category_chart_data_returns_selected_category_scope():
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A", "B", "B"],
+            FACTORY_COL: ["S1", "S2", "S3", "S4"],
+        }
+    )
+    metric = pd.Series([0, 5, 20, 25])
+    all_table = build_bin_table_by_width(metric, bin_width=10, store_series=df[FACTORY_COL])
+    category_tables = build_category_bin_tables(
+        df,
+        metric,
+        bin_width=10,
+        store_series=df[FACTORY_COL],
+    )
+
+    selected = select_category_chart_data(
+        category_tables,
+        "B",
+        fallback_bin_table=all_table,
+        fallback_metric_series=metric,
+        fallback_store_series=df[FACTORY_COL],
+    )
+
+    assert selected["label"] == "B"
+    assert selected["metric_series"].tolist() == [20, 25]
+    assert selected["store_series"].tolist() == ["S3", "S4"]
+    assert selected["bin_table"]["count"].tolist() == [2]
+
+
+def test_bin_chart_title_is_readable_and_keeps_metric_name():
+    title = bin_chart_title("КИР-950")
+
+    assert title == "Распределение по бинам: КИР-950"
+
+
+def test_bin_chart_scope_caption_highlights_selected_category():
+    assert bin_chart_scope_caption("Бакалея") == "Категория на графике: Бакалея"
+    assert bin_chart_scope_caption("Все категории") == "График: все выбранные категории"
 
 
 def test_group_comparison_tables_split_categories_by_ts_when_multiple_networks_selected():
