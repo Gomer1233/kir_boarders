@@ -1174,9 +1174,11 @@ def test_relationship_summary_table_splits_network_and_category_rows():
     assert display[["ТС", "Категория"]].values.tolist() == [
         ["A", "Cat 1"],
         ["A", "Cat 2"],
+        ["A", "Итого по ТС"],
         ["B", "Cat 1"],
+        ["B", "Итого по ТС"],
     ]
-    assert display["Сумма КИР"].tolist() == ["40", "20", "100"]
+    assert display["Сумма КИР"].tolist() == ["40", "20", "60", "100", "100"]
 
 
 def test_split_summary_tables_by_network_returns_one_table_per_network():

@@ -2043,6 +2043,13 @@ def relationship_summary_table(filtered, metric):
     summaries = []
     for network_name, network_df in split_by_network(filtered):
         summary = kir_percentage_summary(network_df, metric)
+        if CATEGORY_COL in network_df.columns:
+            total_source = network_df.drop(columns=[CATEGORY_COL])
+            total_summary = kir_percentage_summary(total_source, metric)
+            if not total_summary.empty:
+                total_row = total_summary.iloc[0].drop(labels=["Итого"], errors="ignore").to_dict()
+                total_row[CATEGORY_COL] = "Итого по ТС"
+                summary = pd.concat([summary, pd.DataFrame([total_row])], ignore_index=True)
         summary.insert(0, TS_COL, network_name)
         summaries.append(summary)
     if not summaries:
