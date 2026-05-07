@@ -25,6 +25,8 @@ from dashboard_streamlit import (
     GROUP_COLUMNS,
     RELATIONSHIP_COLUMNS,
     build_bin_table,
+    build_category_bin_tables,
+    build_category_first_bins_summaries,
     bin_width_settings,
     calculate_relationship_stats,
     chart_settings_summary,
@@ -481,6 +483,82 @@ def test_build_bin_table_counts_rows_per_interval():
     assert table["count"].tolist() == [3, 2]
     assert round(table["share"].sum(), 6) == 1.0
     assert {"bin", "count", "share"}.issubset(table.columns)
+
+
+def test_build_category_bin_tables_builds_one_bin_table_per_category():
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A", "B", "B"],
+            FACTORY_COL: ["S1", "S2", "S1", "S3"],
+        }
+    )
+    metric = pd.Series([0, 5, 0, 15])
+
+    tables = build_category_bin_tables(
+        df,
+        metric,
+        bin_width=10,
+        store_series=df[FACTORY_COL],
+    )
+
+    assert [item["category"] for item in tables] == ["A", "B"]
+    assert tables[0]["bin_table"]["count"].tolist() == [2]
+    assert tables[0]["bin_table"]["store_count"].tolist() == [2]
+    assert tables[1]["bin_table"]["count"].tolist() == [1, 1]
+    assert tables[1]["bin_table"]["store_count"].tolist() == [1, 1]
+
+
+def test_build_category_bin_tables_handles_empty_categorical_category():
+    categories = pd.Series(
+        pd.Categorical(["A", None, "A"], categories=["A"]),
+        name="\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f",
+    )
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": categories,
+            FACTORY_COL: ["S1", "S2", "S3"],
+        }
+    )
+    metric = pd.Series([0, 5, 15])
+
+    tables = build_category_bin_tables(
+        df,
+        metric,
+        bin_width=10,
+        store_series=df[FACTORY_COL],
+    )
+
+    assert [item["category"] for item in tables] == ["A", "Без категории"]
+    assert tables[0]["bin_table"]["count"].tolist() == [1, 1]
+    assert tables[1]["bin_table"]["count"].tolist() == [1]
+
+
+def test_build_category_first_bins_summaries_uses_shared_n_for_each_category():
+    df = pd.DataFrame(
+        {
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["A", "A", "B", "B", "B"],
+            FACTORY_COL: ["S1", "S2", "S1", "S3", "S4"],
+        }
+    )
+    metric = pd.Series([0, 15, 0, 5, 25])
+    tables = build_category_bin_tables(
+        df,
+        metric,
+        bin_width=10,
+        store_series=df[FACTORY_COL],
+    )
+
+    summaries = build_category_first_bins_summaries(tables, n_bins=2)
+
+    assert summaries[0]["category"] == "A"
+    assert summaries[0]["bins_used"] == 2
+    assert summaries[0]["store_sum"] == 2
+    assert summaries[0]["total_stores"] == 2
+    assert summaries[1]["category"] == "B"
+    assert summaries[1]["bins_used"] == 2
+    assert summaries[1]["store_sum"] == 2
+    assert summaries[1]["total_stores"] == 3
+    assert round(summaries[1]["store_share"], 4) == 0.6667
 
 
 def test_group_comparison_tables_split_categories_by_ts_when_multiple_networks_selected():

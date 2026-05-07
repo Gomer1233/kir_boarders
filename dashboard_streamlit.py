@@ -1007,6 +1007,67 @@ def build_bin_table_by_width(series, bin_width, store_series=None, max_bins=2000
     return pd.DataFrame(rows)
 
 
+def _category_bin_label(category):
+    if pd.isna(category):
+        return "Без категории"
+    return str(category)
+
+
+def build_category_bin_tables(filtered, numeric_metric, bin_width, store_series=None, max_bins=2000):
+    if CATEGORY_COL not in filtered.columns:
+        return []
+
+    source = pd.DataFrame(
+        {
+            "category": filtered[CATEGORY_COL],
+            "metric": pd.to_numeric(numeric_metric, errors="coerce"),
+        },
+        index=filtered.index,
+    )
+    if store_series is not None:
+        source["store"] = pd.Series(store_series, index=filtered.index)
+    source = source.dropna(subset=["metric"])
+    if source.empty:
+        return []
+
+    source["category_label"] = source["category"].map(_category_bin_label)
+    category_tables = []
+    grouped = source.groupby("category_label", sort=False)
+    for category_label, category_source in sorted(grouped, key=lambda item: item[0]):
+        category_metric = category_source["metric"]
+        category_store_series = category_source["store"] if "store" in category_source.columns else None
+        category_tables.append(
+            {
+                "category": category_label,
+                "bin_table": build_bin_table_by_width(
+                    category_metric,
+                    bin_width=bin_width,
+                    store_series=category_store_series,
+                    max_bins=max_bins,
+                ),
+                "metric_series": category_metric,
+                "store_series": category_store_series,
+            }
+        )
+    return category_tables
+
+
+def build_category_first_bins_summaries(category_bin_tables, n_bins):
+    summaries = []
+    for item in category_bin_tables:
+        category_table = item["bin_table"]
+        if category_table.empty:
+            continue
+        summary = first_bins_summary(
+            item["metric_series"],
+            category_table,
+            min(n_bins, len(category_table)),
+            store_series=item["store_series"],
+        )
+        summaries.append({"category": item["category"], **summary})
+    return summaries
+
+
 def _nice_width(raw_width):
     if raw_width <= 0:
         return 1.0
@@ -1704,7 +1765,19 @@ def _render_metric_analysis_tab(
         st.bar_chart(bin_table.set_index("bin")["count"] if not bin_table.empty else bin_table)
     st.subheader("Bin table")
     if not bin_table.empty:
-        max_bins = len(bin_table)
+        category_bin_tables = build_category_bin_tables(
+            filtered,
+            numeric_metric,
+            bin_width=bin_width,
+            store_series=store_series,
+            max_bins=max_bin_count,
+        )
+        show_category_tables = len(category_bin_tables) > 1
+        max_bins = (
+            max(len(item["bin_table"]) for item in category_bin_tables)
+            if show_category_tables
+            else len(bin_table)
+        )
         st.caption(
             "Для анализа порогов используйте плитки перцентилей выше. "
             "Таблица бинов нужна для анализа формы распределения и концентрации магазинов по диапазонам."
@@ -1717,6 +1790,29 @@ def _render_metric_analysis_tab(
             step=1,
             key=f"{key_prefix}_first_bins_count_{metric}",
         )
+        if show_category_tables:
+            st.caption("Bin table is split by category for the Stores + categories route.")
+            category_summaries = {
+                item["category"]: item
+                for item in build_category_first_bins_summaries(category_bin_tables, n_bins)
+            }
+            for item in category_bin_tables:
+                category_table = item["bin_table"]
+                if category_table.empty:
+                    continue
+                st.markdown(f"**{item['category']}**")
+                first_bins = category_summaries[item["category"]]
+                sum_col1, sum_col2 = st.columns(2)
+                sum_col1.metric("First bins used", first_bins["bins_used"])
+                sum_col2.metric(
+                    "Stores in first bins",
+                    first_bins["store_sum"],
+                    f"{first_bins['store_share']:.1%} of category stores",
+                    delta_color="off",
+                )
+                st.dataframe(prepare_bin_table_display(category_table), use_container_width=True)
+            return
+
         first_bins = first_bins_summary(numeric_metric, bin_table, n_bins, store_series=store_series)
         sum_col1, sum_col2 = st.columns(2)
         sum_col1.metric("First bins used", first_bins["bins_used"])
