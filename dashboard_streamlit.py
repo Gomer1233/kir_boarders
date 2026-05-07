@@ -1860,9 +1860,12 @@ def _render_kir_percentages_tab(filtered, selected_metric, filter_values=None):
     st.caption("Сводная таблица и бины ниже рассчитаны по строкам после этих настроек вкладки.")
 
     st.caption(f"Формула: {selected_kir} / {selected_base} * 100. Значение 12.5 означает 12.5%.")
-    st.subheader("Сводная таблица по суммам")
-    summary = kir_percentage_summary(analysis_source, selected_kir)
-    st.dataframe(format_kir_summary_display(summary), use_container_width=True)
+    summary = relationship_summary_table(analysis_source, selected_kir)
+    _render_summary_tables_by_network(
+        summary,
+        "Сводная таблица по суммам",
+        "Суммы и проценты рассчитаны по строкам после настроек этой вкладки.",
+    )
 
     numeric_percent = pd.to_numeric(analysis_source[percent_metric], errors="coerce")
     _render_metric_analysis_tab(
@@ -1943,10 +1946,11 @@ def _render_relationships_tab(filtered, metric, numeric_metric):
         st.markdown(comparison_html, unsafe_allow_html=True)
 
     summary = relationship_summary_table(filtered, metric)
-    if not summary.empty:
-        with st.expander("Сводная таблица по суммам", expanded=False):
-            st.caption("Суммы и проценты считаются по текущим фильтрам dashboard для выбранного КИР-показателя.")
-            st.dataframe(summary, use_container_width=True)
+    _render_summary_tables_by_network(
+        summary,
+        "Сводная таблица по суммам",
+        "Суммы и проценты считаются по текущим фильтрам dashboard для выбранного КИР-показателя.",
+    )
 
     network_by_name = {name: df for name, df in networks}
     for row in relationship_chart_rows(network_names, available):
@@ -2033,7 +2037,44 @@ def format_kir_summary_display(summary):
 def relationship_summary_table(filtered, metric):
     if metric not in kir_metric_columns(filtered):
         return pd.DataFrame()
-    return format_kir_summary_display(kir_percentage_summary(filtered, metric))
+    if TS_COL not in filtered.columns:
+        return format_kir_summary_display(kir_percentage_summary(filtered, metric))
+
+    summaries = []
+    for network_name, network_df in split_by_network(filtered):
+        summary = kir_percentage_summary(network_df, metric)
+        summary.insert(0, TS_COL, network_name)
+        summaries.append(summary)
+    if not summaries:
+        return pd.DataFrame()
+    return format_kir_summary_display(pd.concat(summaries, ignore_index=True))
+
+
+def split_summary_tables_by_network(summary):
+    if summary.empty:
+        return []
+    if TS_COL not in summary.columns:
+        return [("All", summary.reset_index(drop=True).copy())]
+    return [
+        (str(network_name), network_summary.reset_index(drop=True).copy())
+        for network_name, network_summary in sorted(summary.groupby(TS_COL, dropna=False), key=lambda item: str(item[0]))
+    ]
+
+
+def _render_summary_tables_by_network(summary, title, caption):
+    if summary.empty:
+        return
+
+    tables = split_summary_tables_by_network(summary)
+    with st.expander(title, expanded=False):
+        if caption:
+            st.caption(caption)
+        for index, (network_name, table) in enumerate(tables):
+            if len(tables) > 1:
+                if index:
+                    st.divider()
+                st.markdown(f"**{network_name}**")
+            st.dataframe(table, use_container_width=True)
 
 
 def resolve_kir_percent_settings(settings, kir_columns, base_columns, default_metric):

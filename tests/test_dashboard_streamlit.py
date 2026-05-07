@@ -1157,6 +1157,45 @@ def test_relationship_summary_table_reuses_kir_summary_for_current_metric():
     assert display.loc[0, "КИР / Свободный ТЗ, %"] == "26.7%"
 
 
+def test_relationship_summary_table_splits_network_and_category_rows():
+    source = pd.DataFrame(
+        {
+            "ТС": ["A", "A", "A", "B"],
+            "Категория": ["Cat 1", "Cat 2", "Cat 1", "Cat 1"],
+            "КИР-950 руб": [10, 20, 30, 100],
+            "Списания": [100, 200, 300, 500],
+            "Выручка": [1000, 2000, 3000, 5000],
+            "Свободный ТЗ": [50, 100, 150, 250],
+        }
+    )
+
+    display = relationship_summary_table(source, "КИР-950 руб")
+
+    assert display[["ТС", "Категория"]].values.tolist() == [
+        ["A", "Cat 1"],
+        ["A", "Cat 2"],
+        ["B", "Cat 1"],
+    ]
+    assert display["Сумма КИР"].tolist() == ["40", "20", "100"]
+
+
+def test_split_summary_tables_by_network_returns_one_table_per_network():
+    summary = pd.DataFrame(
+        {
+            TS_COL: ["A", "A", "B"],
+            "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f": ["Cat 1", "Cat 2", "Cat 1"],
+            "\u0421\u0443\u043c\u043c\u0430 \u041a\u0418\u0420": ["40", "20", "100"],
+        }
+    )
+
+    tables = split_summary_tables_by_network(summary)
+
+    assert [name for name, _ in tables] == ["A", "B"]
+    assert tables[0][1][TS_COL].tolist() == ["A", "A"]
+    assert tables[0][1]["\u0421\u0443\u043c\u043c\u0430 \u041a\u0418\u0420"].tolist() == ["40", "20"]
+    assert tables[1][1][TS_COL].tolist() == ["B"]
+
+
 def test_metric_analysis_does_not_render_boxplot():
     source = Path("dashboard_streamlit.py").read_text(encoding="utf-8")
 
@@ -1220,6 +1259,7 @@ from dashboard_streamlit import (
     apply_pending_session_value,
     queue_session_value,
     relationship_summary_table,
+    split_summary_tables_by_network,
     recommended_bin_width_for_target_share,
     set_session_value,
     relationship_chart_rows,
